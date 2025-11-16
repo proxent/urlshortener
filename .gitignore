@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.vscode/
+.DS_Store
+coverage/
+
+/src/generated/prisma
+
+/src/generated/prisma
