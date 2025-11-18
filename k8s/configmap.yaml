@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: urlshortner-config
+  namespace: urlshortner
+data:
+  NODE_ENV: 'production'
+  PORT: '3000'
+  # Replace with the public host that fronts this service (e.g., ALB URL or custom domain)
+  BASE_URL: 'https://short.example.com'

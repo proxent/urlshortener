@@ -8,3 +8,4 @@ coverage/
 /src/generated/prisma
 
 /src/generated/prisma
+k8s/secrets.yaml

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: urlshortener-api
+  namespace: urlshortener
+  labels:
+    app: urlshortener-api
+spec:
+  selector:
+    app: urlshortener-api
+  ports:
+    - protocol: TCP
+      port: 80 # 클러스터 내에서 노출되는 포트
+      targetPort: 3000
+  type: ClusterIP
+  # type: LoadBalancer # LoadBalancer 타입으로 변경 시 클라우드 제공자의 로드밸런서가 프로비저닝 됩니다.
+  # type: NodePort # NodePort 타입으로 변경 시 각 노드의 특정 포트로 접근이 가능합니다.
+  # 기본값은 ClusterIP이며, 필요에 따라 변경할 수 있습니다.
+  # LoadBalancer 또는 NodePort 타입을 사용할 경우, 외부에서 접근할 수 있는 엔드포인트가 생성됩니다.
