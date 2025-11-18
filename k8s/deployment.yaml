@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: urlshortner
+  namespace: urlshortner
+  labels:
+    app: urlshortner
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: urlshortner
+  template:
+    metadata:
+      labels:
+        app: urlshortner
+    spec:
+      containers:
+        - name: urlshortner
+          image: '437299551653.dkr.ecr.us-west-2.amazonaws.com/urlshortener/api:latest'
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: urlshortner-config
+            - secretRef:
+                name: urlshortner-secrets
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
