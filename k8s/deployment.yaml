@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: urlshortener
-          image: '437299551653.dkr.ecr.us-west-2.amazonaws.com/urlshortener/api:latest'
+          image: url-shortener:dev
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
