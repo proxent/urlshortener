@@ -4,10 +4,10 @@ metadata:
   name: urlshortener-api
   namespace: urlshortener
   labels:
-    app: urlshortener-api
+    app: urlshortener
 spec:
   selector:
-    app: urlshortener-api
+    app: urlshortener
   ports:
     - protocol: TCP
       port: 80 # 클러스터 내에서 노출되는 포트
