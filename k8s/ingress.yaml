@@ -4,10 +4,11 @@ metadata:
   name: urlshortener-ingress
   namespace: urlshortener
   annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    kubernetes.io/ingress.class: nginx
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     # HTTPS 쓸 거면 443 포트랑 인증서 관련 annotation 추가
 spec:
   rules:
@@ -17,6 +18,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: urlshortener
+                name: urlshortener-service
                 port:
                   number: 80
