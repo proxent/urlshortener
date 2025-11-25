@@ -7,4 +7,4 @@ data:
   NODE_ENV: 'production'
   PORT: '3000'
   # Replace with the public host that fronts this service (e.g., ALB URL or custom domain)
-  BASE_URL: 'https://short.example.com'
+  BASE_URL: 'http://localhost:3000'
