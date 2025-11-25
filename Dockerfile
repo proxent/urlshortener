@@ -3,13 +3,14 @@ FROM node:24-alpine AS base
 WORKDIR /app
 
 # Required by Prisma engines on Alpine
-RUN apk add --no-cache openssl postgresql-client && corepack enable
+RUN apk add --no-cache openssl && corepack enable
 
 
 FROM base AS deps
 
-COPY package.json pnpm-lock.yaml prisma ./
-COPY scripts ./scripts
+COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
+
 RUN pnpm install --frozen-lockfile
 RUN pnpm prisma generate
 
@@ -36,6 +37,7 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
 COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma
 
 
 EXPOSE 3000
