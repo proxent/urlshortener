@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: url-shortener-config
+  namespace: url-shortener
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  # Set to the public URL that fronts the app (e.g., LoadBalancer DNS or ingress host)
+  BASE_URL: "http://change-me.example.com"
