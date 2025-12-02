@@ -1,0 +1,12 @@
+controller:
+  service:
+    # OCI Load Balancer 설정
+    annotations:
+      # Flexible 모양 사용 (권장)
+      service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
+      # 최소 대역폭 (Mbps)
+      service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
+      # 최대 대역폭 (Mbps) - 필요에 따라 100~8000 사이 조절
+      service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "100"
+    # 외부 트래픽 정책 (Client IP 보존 등을 위해 Local 권장, 문제시 Cluster로 변경)
+    externalTrafficPolicy: Local
