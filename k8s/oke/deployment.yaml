@@ -24,10 +24,6 @@ spec:
           ports:
             - containerPort: 3000
               name: http
-          volumeMounts:
-            - name: oci-secrets
-              mountPath: /mnt/secrets-store
-              readOnly: true
           envFrom:
             - configMapRef:
                 name: url-shortener-config
@@ -53,10 +49,3 @@ spec:
               cpu: 500m
               memory: 256Mi
       terminationGracePeriodSeconds: 30
-      volumes:
-        - name: oci-secrets
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: url-shortener-spc
