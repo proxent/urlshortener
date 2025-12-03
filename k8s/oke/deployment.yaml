@@ -15,6 +15,8 @@ spec:
       labels:
         app: url-shortener
     spec:
+      imagePullSecrets:
+        - name: ocir-secret
       containers:
         - name: url-shortener
           image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:latest
