@@ -1,12 +1,16 @@
 controller:
   service:
-    # OCI Load Balancer 설정
+    # 핵심: 로드 밸런서 타입을 'nlb'로 지정
     annotations:
-      # Flexible 모양 사용 (권장)
-      service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
-      # 최소 대역폭 (Mbps)
-      service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
-      # 최대 대역폭 (Mbps) - 필요에 따라 100~8000 사이 조절
-      service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "10"
-    # 외부 트래픽 정책 (Client IP 보존 등을 위해 Local 권장, 문제시 Cluster로 변경)
+      service.beta.kubernetes.io/oci-load-balancer-type: "nlb"
+      
+      # NLB는 Flexible Shape 설정(Mbps)이 필요 없습니다. (지워도 됨)
+      # traffic policy는 Local을 권장 (클라이언트 IP 보존)
     externalTrafficPolicy: Local
+    
+    # NLB는 L4이므로 http/https 포트를 그대로 열어줍니다.
+    ports:
+      http: 80
+      https: 443
+
+  
