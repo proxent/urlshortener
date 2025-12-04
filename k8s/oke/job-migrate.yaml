@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: url-shortener-migrate
+  namespace: url-shortener
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: migrate
+          image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:latest
+          imagePullPolicy: IfNotPresent
+          command: ["npx", "prisma", "migrate", "deploy"]
+          envFrom:
+            - secretRef:
+                name: url-shortener-secrets
+            - configMapRef:
+                name: url-shortener-config
