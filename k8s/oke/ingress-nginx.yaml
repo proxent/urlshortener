@@ -2,7 +2,7 @@ controller:
   service:
     # 핵심: 로드 밸런서 타입을 'nlb'로 지정
     annotations:
-      service.beta.kubernetes.io/oci-load-balancer-type: "nlb"
+      oci.oraclecloud.com/load-balancer-type: "nlb"
       
       # NLB는 Flexible Shape 설정(Mbps)이 필요 없습니다. (지워도 됨)
       # traffic policy는 Local을 권장 (클라이언트 IP 보존)
@@ -12,5 +12,4 @@ controller:
     ports:
       http: 80
       https: 443
-
   
