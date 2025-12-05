@@ -7,7 +7,7 @@ spec:
   # Set to your ingress class if you install one (e.g., nginx, oci)
   ingressClassName: nginx
   rules:
-    - host: 129-153-117-17.nip.io
+    - host: 141-148-185-116.nip.io
       http:
         paths:
           - path: /

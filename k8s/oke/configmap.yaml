@@ -7,4 +7,4 @@ data:
   NODE_ENV: "production"
   PORT: "3000"
   # Set to the public URL that fronts the app (e.g., LoadBalancer DNS or ingress host)
-  BASE_URL: "http://129-153-117-17.nip.io"
+  BASE_URL: "http://141-148-185-116.nip.io"
