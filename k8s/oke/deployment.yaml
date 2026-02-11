@@ -19,6 +19,7 @@ spec:
         - name: ocir-secret
       containers:
         - name: url-shortener
+          # Use an immutable tag (for example: sha-<git-sha>) and sync manually from Argo CD.
           image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:latest
           imagePullPolicy: IfNotPresent
           ports:
