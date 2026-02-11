@@ -1,4 +1,4 @@
-name: OKE CD
+name: OKE Image Build
 
 on:
   workflow_dispatch:
@@ -34,7 +34,6 @@ jobs:
           images: ${{ secrets.OCIR_REGISTRY }}/${{ secrets.OCIR_NAMESPACE }}/${{ secrets.OCIR_REPOSITORY || env.IMAGE_NAME }}
           tags: |
             type=sha
-            type=ref,event=branch
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -43,3 +42,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Print image tag for manual Argo CD deployment
+        env:
+          IMAGE_REPO: ${{ secrets.OCIR_REGISTRY }}/${{ secrets.OCIR_NAMESPACE }}/${{ secrets.OCIR_REPOSITORY || env.IMAGE_NAME }}
+        run: |
+          echo "Built image tag: ${{ steps.meta.outputs.version }}"
+          echo "Use this image in k8s/oke/deployment.yaml before Argo CD sync:"
+          echo "${IMAGE_REPO}:${{ steps.meta.outputs.version }}"
