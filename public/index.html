@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -36,17 +36,17 @@
 <body>
   <h1>URL Shortener</h1>
 
-  <!-- URL 입력 -->
-  <label>원본 URL:</label>
+  <!-- URL input -->
+  <label>Original URL:</label>
   <input id="urlInput" placeholder="https://example.com" />
 
-  <button id="createBtn">단축 URL 생성</button>
+  <button id="createBtn">Create Short URL</button>
 
-  <!-- 결과 출력 -->
+  <!-- Result output -->
   <div id="result" style="margin-top: 16px"></div>
 
-  <h2 style="margin-top: 32px">링크 목록</h2>
-  <button id="refreshBtn">새로고침</button>
+  <h2 style="margin-top: 32px">Link List</h2>
+  <button id="refreshBtn">Refresh</button>
   <ul id="links"></ul>
 
   <script>
@@ -56,7 +56,7 @@
     const result = document.getElementById("result");
     const linksList = document.getElementById("links");
 
-    // 단축 URL 생성 함수
+    // Create short URL
     async function createShortUrl(url) {
       const res = await fetch("/shorten", {
         method: "POST",
@@ -65,23 +65,23 @@
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "오류 발생");
+      if (!res.ok) throw new Error(data.error || "An error occurred");
 
       return data;
     }
 
-    // 링크 목록 가져오기
+    // Fetch links
     async function fetchLinks() {
       const res = await fetch("/links");
       return res.json();
     }
 
-    // 링크 목록 렌더링
+    // Render links
     function renderLinks(links) {
       linksList.innerHTML = "";
 
       if (links.length === 0) {
-        linksList.innerHTML = "<li>생성된 링크가 없습니다.</li>";
+        linksList.innerHTML = "<li>No links have been created yet.</li>";
         return;
       }
 
@@ -92,34 +92,34 @@
             <a href="${link.shortUrl}" target="_blank">${link.shortUrl}</a>
             &nbsp; → &nbsp;
             ${link.originalUrl}
-            <div class="meta">클릭 수: ${link.hitCount}</div>
+            <div class="meta">Clicks: ${link.hitCount}</div>
           `;
 
         linksList.appendChild(li);
       });
     }
 
-    // 단축 URL 생성 버튼 클릭
+    // Create short URL button click
     createBtn.addEventListener("click", async () => {
       const url = urlInput.value.trim();
       if (!url) {
-        result.textContent = "URL을 입력하세요.";
+        result.textContent = "Please enter a URL.";
         return;
       }
 
-      result.textContent = "생성 중...";
+      result.textContent = "Creating...";
 
       try {
         const data = await createShortUrl(url);
 
         result.innerHTML = `
-            단축 URL 생성됨:<br/>
+            Short URL created:<br/>
             <a href="${data.shortUrl}" target="_blank">${data.shortUrl}</a>
           `;
 
         urlInput.value = "";
 
-        // 목록 업데이트
+        // Refresh list
         const links = await fetchLinks();
         renderLinks(links);
       } catch (err) {
@@ -127,13 +127,13 @@
       }
     });
 
-    // 새로고침 버튼
+    // Refresh button
     refreshBtn.addEventListener("click", async () => {
       const links = await fetchLinks();
       renderLinks(links);
     });
 
-    // 페이지 로드시 목록 자동 로드
+    // Auto-load list on page load
     (async () => {
       const links = await fetchLinks();
       renderLinks(links);

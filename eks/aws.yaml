@@ -3,16 +3,16 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: urlshortener-cluster # 클러스터 이름 (원하면 바꿔도 됨)
-  region: us-west-2 # 미국 서부(오리건) 리전
-  version: '1.32' # 현재 EKS에서 표준 지원 중인 버전 중 하나
+  name: urlshortener-cluster # Cluster name (change if needed)
+  region: us-west-2 # US West (Oregon) region
+  version: '1.32' # One of the currently standard-supported EKS versions
 
-# IRSA(OIDC) 켜두는 게 요즘 필수 베스트 프랙티스
-# - 나중에 ServiceAccount별로 S3/SQS/Dynamo 같은 권한 줄 때 필요
+# Enabling IRSA (OIDC) is a current best practice
+# - Needed later when granting S3/SQS/Dynamo permissions per ServiceAccount
 iam:
   withOIDC: true
 
-# 컨트롤 플레인 로그를 CloudWatch로 보내기 (운영/디버깅에 도움됨)
+# Send control plane logs to CloudWatch (helps operations/debugging)
 cloudWatch:
   clusterLogging:
     enableTypes:
@@ -22,29 +22,29 @@ cloudWatch:
       - controllerManager
       - scheduler
 
-# EKS 관리형 노드 그룹 하나 (가장 기본 구조)
+# One managed EKS node group (most basic setup)
 managedNodeGroups:
   - name: ng-1
-    amiFamily: AmazonLinux2 # 기본 EKS AL2 AMI (연습용으론 무난함)
-    instanceType: t3.small # 연습용 저렴 스펙
+    amiFamily: AmazonLinux2 # Default EKS AL2 AMI (good for practice)
+    instanceType: t3.small # Low-cost spec for practice
     desiredCapacity: 1
     minSize: 1
     maxSize: 1
-    volumeSize: 20 # 루트 디스크 20GiB (필요하면 늘리면 됨)
+    volumeSize: 20 # Root disk 20GiB (increase if needed)
 
-    # 워커 노드를 프라이빗 서브넷에 두는 패턴 (공인 IP 없음 → 보안상 더 좋음)
+    # Pattern: place worker nodes in private subnets (no public IP -> better security)
     privateNetworking: true
 
-    # 나중에 ALB Ingress Controller, Cluster Autoscaler, CW Agent 같은 거 쓸 때 필요한
-    # IAM Addon Policy들을 미리 켜두는 옵션들
+    # Required later for components like ALB Ingress Controller, Cluster Autoscaler, CW Agent
+    # Options to enable IAM addon policies in advance
     iam:
       withAddonPolicies:
-        albIngress: true # AWS Load Balancer Controller에서 쓰는 권한
-        autoScaler: true # Cluster Autoscaler용
-        ebs: true # EBS 볼륨(퍼시스턴트 볼륨) 쓸 때
-        cloudWatch: true # CW 에이전트/메트릭용
+        albIngress: true # Permission used by AWS Load Balancer Controller
+        autoScaler: true # For Cluster Autoscaler
+        ebs: true # When using EBS volumes (persistent volumes)
+        cloudWatch: true # For CloudWatch agent/metrics
 
-    # 있으면 좋지만 없어도 되는 정도 (원하면 나중에 채우기)
+    # Nice to have but optional (fill in later if desired)
     labels:
       role: worker
       app: urlshortener
