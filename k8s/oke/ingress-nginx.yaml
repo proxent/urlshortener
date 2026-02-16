@@ -1,14 +1,14 @@
 controller:
   service:
-    # 핵심: 로드 밸런서 타입을 'nlb'로 지정
+    # Key point: set the load balancer type to 'nlb'
     annotations:
       oci.oraclecloud.com/load-balancer-type: "nlb"
       oci.oraclecloud.com/security-rule-management-mode: "NSG"
-      # NLB는 Flexible Shape 설정(Mbps)이 필요 없습니다. (지워도 됨)
-      # traffic policy는 Local을 권장 (클라이언트 IP 보존)
+      # NLB does not require Flexible Shape (Mbps) settings. (Can be removed)
+      # Local traffic policy is recommended (preserves client IP)
     externalTrafficPolicy: Local
     
-    # NLB는 L4이므로 http/https 포트를 그대로 열어줍니다.
+    # NLB is L4, so http/https ports are opened as-is.
     ports:
       http: 80
       https: 443
