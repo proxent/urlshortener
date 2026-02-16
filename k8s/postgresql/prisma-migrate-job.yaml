@@ -15,5 +15,7 @@ spec:
           args: ["prisma", "migrate", "deploy"]
           env:
             - name: DATABASE_URL
-              value: "postgresql://urlshortener-postgres-user:supersecret@postgres-service:5432/urlshortener-postgres-db"  # 👉 Replace this with your database URL
-          # You can add other env values like NODE_ENV here if needed
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: DATABASE_URL
