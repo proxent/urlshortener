@@ -4,7 +4,7 @@ metadata:
   name: postgres
   namespace: urlshortener
 spec:
-  serviceName: postgres          # 위 Service 이름과 일치
+  serviceName: postgres          # Must match the Service name above
   replicas: 1
   selector:
     matchLabels:

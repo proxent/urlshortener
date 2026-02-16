@@ -8,7 +8,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: ['warn', 'error'], // 필요하면 'query'도 추가해서 디버깅 가능
+    log: ['warn', 'error'], // Add 'query' as well for deeper debugging if needed
   });
 
 if (process.env.NODE_ENV !== 'production') {
