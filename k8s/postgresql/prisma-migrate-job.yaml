@@ -15,5 +15,8 @@ spec:
           args: ["prisma", "migrate", "deploy"]
           env:
             - name: DATABASE_URL
-              value: "postgresql://urlshortener-postgres-user:supersecret@postgres-service:5432/urlshortener-postgres-db"  # 👉 여기를 너의 데이터베이스 URL로 바꿔줘
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: DATABASE_URL
           # 필요하면 NODE_ENV 등 다른 env도 여기서 넣어줄 수 있음
