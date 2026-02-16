@@ -4,16 +4,16 @@ metadata:
   name: prisma-migrate
   namespace: urlshortener
 spec:
-  backoffLimit: 3  # 실패하면 최대 3번까지 재시도
+  backoffLimit: 3  # Retry up to 3 times on failure
   template:
     spec:
       restartPolicy: OnFailure
       containers:
         - name: prisma-migrate
-          image: url-shortener:dev  # 👉 여기를 너의 앱 이미지 이름으로 바꿔줘
+          image: url-shortener:dev  # Replace with your application image name
           command: ["pnpm"]
           args: ["prisma", "migrate", "deploy"]
           env:
             - name: DATABASE_URL
-              value: "postgresql://urlshortener-postgres-user:supersecret@postgres-service:5432/urlshortener-postgres-db"  # 👉 여기를 너의 데이터베이스 URL로 바꿔줘
-          # 필요하면 NODE_ENV 등 다른 env도 여기서 넣어줄 수 있음
+              value: "postgresql://urlshortener-postgres-user:supersecret@postgres-service:5432/urlshortener-postgres-db"  # Replace with your database URL
+          # Add other env vars here if needed (for example NODE_ENV)

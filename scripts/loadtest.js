@@ -5,16 +5,16 @@ export let options = {
   scenarios: {
     high_load: {
       executor: 'constant-arrival-rate',
-      rate: 800,            // 초당 300 요청 시도 (RPS)
+      rate: 800,            // Attempt 300 requests per second (RPS)
       timeUnit: '1s',
       duration: '5s',
-      preAllocatedVUs: 300, // 필요한 VU 미리 확보
-      maxVUs: 1000,         // 최대로 쓸 수 있는 VU
+      preAllocatedVUs: 300, // Pre-allocate VUs needed for the test
+      maxVUs: 1000,         // Maximum VUs allowed
     },
   },
 
   thresholds: {
-    http_req_duration: ['p(95)<300'], // p95 < 300ms 목표
+    http_req_duration: ['p(95)<300'], // Target p95 < 300ms
   },
 };
 

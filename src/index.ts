@@ -10,10 +10,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.use(express.json());
 
-// Routes
 app.use('/', router);
 
-// Error Handler (Express 5 style)
 app.use(errorHandler);
 
 app.listen(config.PORT, () => {

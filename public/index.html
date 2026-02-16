@@ -1,144 +1,133 @@
 <!doctype html>
-<html lang="ko">
-
-<head>
-  <meta charset="UTF-8" />
-  <title>URL Shortener</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      max-width: 500px;
-      margin: 40px auto;
-    }
-
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-top: 8px;
-    }
-
-    button {
-      padding: 8px 12px;
-      margin-top: 12px;
-    }
-
-    #links li {
-      margin-bottom: 10px;
-    }
-
-    .meta {
-      font-size: 12px;
-      color: gray;
-    }
-  </style>
-</head>
-
-<body>
-  <h1>URL Shortener</h1>
-
-  <!-- URL 입력 -->
-  <label>원본 URL:</label>
-  <input id="urlInput" placeholder="https://example.com" />
-
-  <button id="createBtn">단축 URL 생성</button>
-
-  <!-- 결과 출력 -->
-  <div id="result" style="margin-top: 16px"></div>
-
-  <h2 style="margin-top: 32px">링크 목록</h2>
-  <button id="refreshBtn">새로고침</button>
-  <ul id="links"></ul>
-
-  <script>
-    const urlInput = document.getElementById("urlInput");
-    const createBtn = document.getElementById("createBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
-    const result = document.getElementById("result");
-    const linksList = document.getElementById("links");
-
-    // 단축 URL 생성 함수
-    async function createShortUrl(url) {
-      const res = await fetch("/shorten", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "오류 발생");
-
-      return data;
-    }
-
-    // 링크 목록 가져오기
-    async function fetchLinks() {
-      const res = await fetch("/links");
-      return res.json();
-    }
-
-    // 링크 목록 렌더링
-    function renderLinks(links) {
-      linksList.innerHTML = "";
-
-      if (links.length === 0) {
-        linksList.innerHTML = "<li>생성된 링크가 없습니다.</li>";
-        return;
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>URL Shortener</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 500px;
+        margin: 40px auto;
       }
 
-      links.forEach((link) => {
-        const li = document.createElement("li");
+      input {
+        width: 100%;
+        padding: 8px;
+        margin-top: 8px;
+      }
 
-        li.innerHTML = `
+      button {
+        padding: 8px 12px;
+        margin-top: 12px;
+      }
+
+      #links li {
+        margin-bottom: 10px;
+      }
+
+      .meta {
+        font-size: 12px;
+        color: gray;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>URL Shortener</h1>
+
+    <label>Original URL:</label>
+    <input id="urlInput" placeholder="https://example.com" />
+
+    <button id="createBtn">Create short URL</button>
+
+    <div id="result" style="margin-top: 16px"></div>
+
+    <h2 style="margin-top: 32px">Link List</h2>
+    <button id="refreshBtn">Refresh</button>
+    <ul id="links"></ul>
+
+    <script>
+      const urlInput = document.getElementById('urlInput');
+      const createBtn = document.getElementById('createBtn');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const result = document.getElementById('result');
+      const linksList = document.getElementById('links');
+
+      async function createShortUrl(url) {
+        const res = await fetch('/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong');
+
+        return data;
+      }
+
+      async function fetchLinks() {
+        const res = await fetch('/links');
+        return res.json();
+      }
+
+      function renderLinks(links) {
+        linksList.innerHTML = '';
+
+        if (links.length === 0) {
+          linksList.innerHTML = '<li>No links have been created yet.</li>';
+          return;
+        }
+
+        links.forEach((link) => {
+          const li = document.createElement('li');
+
+          li.innerHTML = `
             <a href="${link.shortUrl}" target="_blank">${link.shortUrl}</a>
             &nbsp; → &nbsp;
             ${link.originalUrl}
-            <div class="meta">클릭 수: ${link.hitCount}</div>
+            <div class="meta">Clicks: ${link.hitCount}</div>
           `;
 
-        linksList.appendChild(li);
-      });
-    }
-
-    // 단축 URL 생성 버튼 클릭
-    createBtn.addEventListener("click", async () => {
-      const url = urlInput.value.trim();
-      if (!url) {
-        result.textContent = "URL을 입력하세요.";
-        return;
+          linksList.appendChild(li);
+        });
       }
 
-      result.textContent = "생성 중...";
+      createBtn.addEventListener('click', async () => {
+        const url = urlInput.value.trim();
+        if (!url) {
+          result.textContent = 'Please enter a URL.';
+          return;
+        }
 
-      try {
-        const data = await createShortUrl(url);
+        result.textContent = 'Creating...';
 
-        result.innerHTML = `
-            단축 URL 생성됨:<br/>
+        try {
+          const data = await createShortUrl(url);
+
+          result.innerHTML = `
+            Short URL created:<br/>
             <a href="${data.shortUrl}" target="_blank">${data.shortUrl}</a>
           `;
 
-        urlInput.value = "";
+          urlInput.value = '';
 
-        // 목록 업데이트
+          const links = await fetchLinks();
+          renderLinks(links);
+        } catch (err) {
+          result.textContent = err.message;
+        }
+      });
+
+      refreshBtn.addEventListener('click', async () => {
         const links = await fetchLinks();
         renderLinks(links);
-      } catch (err) {
-        result.textContent = err.message;
-      }
-    });
+      });
 
-    // 새로고침 버튼
-    refreshBtn.addEventListener("click", async () => {
-      const links = await fetchLinks();
-      renderLinks(links);
-    });
-
-    // 페이지 로드시 목록 자동 로드
-    (async () => {
-      const links = await fetchLinks();
-      renderLinks(links);
-    })();
-  </script>
-</body>
-
+      (async () => {
+        const links = await fetchLinks();
+        renderLinks(links);
+      })();
+    </script>
+  </body>
 </html>

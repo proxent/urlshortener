@@ -11,5 +11,5 @@ spec:
     app: postgres
   ports:
     - name: postgres
-      port: 5432        # 서비스 포트
-      targetPort: 5432  # 컨테이너 포트
+      port: 5432        # Service port
+      targetPort: 5432  # Container port

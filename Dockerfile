@@ -2,7 +2,6 @@ FROM node:24-alpine AS base
 
 WORKDIR /app
 
-# Required by Prisma engines on Alpine
 RUN apk add --no-cache openssl && corepack enable
 
 
@@ -22,7 +21,6 @@ COPY public ./public
 
 RUN pnpm build
 
-# Runtime image
 FROM deps AS prod-deps
 RUN pnpm prune --prod
 
