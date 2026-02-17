@@ -7,3 +7,5 @@ coverage/
 /src/generated/prisma
 
 secrets.yaml
+
+seed_codes.json

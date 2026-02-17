@@ -2,6 +2,12 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 
+const SEED_FILE = __ENV.SEED_FILE || ''; // e.g. ./seed_codes.json
+
+const FILE_CODES = SEED_FILE
+  ? new SharedArray('seed_codes', () => JSON.parse(open(SEED_FILE)))
+  : null;
+
 // --------------------
 // Env (tweak here)
 // --------------------
@@ -39,10 +45,10 @@ const MAX_VUS = parseInt(__ENV.MAX_VUS || '2000', 10);
 // Prevent following redirects (measure only the 302 response)
 export const options = (() => {
   const baseStages = [
-    { target: BASE_RPS, duration: '5m' },                          // warm-up ramp
-    { target: BASE_RPS, duration: '15m' },                         // steady
-    { target: Math.floor(BASE_RPS * SPIKE_MULT), duration: '2m' }, // spike
-    { target: BASE_RPS, duration: '5m' },                          // recovery
+    { target: BASE_RPS, duration: '30s' },                          // warm-up ramp
+    { target: BASE_RPS, duration: '1m' },                         // steady
+    { target: Math.floor(BASE_RPS * SPIKE_MULT), duration: '1m' }, // spike
+    { target: BASE_RPS, duration: '1m' },                          // recovery
   ];
 
   // For cold/warm comparisons, you may want a longer steady run without spikes
@@ -55,7 +61,7 @@ export const options = (() => {
 
   return {
     maxRedirects: 0,
-    discardResponseBodies: true,
+    discardResponseBodies: false,
     thresholds: {
       // Overall failure rate (redirect + shorten) — only for the run phase
       'http_req_failed{phase:run}': ['rate<0.01'],
@@ -118,6 +124,17 @@ function genUrl(i) {
 // Setup: seed codes
 // --------------------
 export function setup() {
+
+  if (FILE_CODES && FILE_CODES.length > 0) {
+    const createdCodes = Array.from(FILE_CODES);
+
+    const hotCount = Math.max(1, Math.floor(createdCodes.length * HOT_SET_PCT));
+    const hotCodes = createdCodes.slice(0, hotCount);
+    const coldCodes = createdCodes.slice(hotCount);
+
+    return { codes: createdCodes, hotCodes, coldCodes };
+  }
+
   const created = [];
 
   const url = `${TARGET}/shorten`;
@@ -130,23 +147,30 @@ export function setup() {
 
   // If SEED_N is too large, setup will take longer and the DB will grow.
   // For cache ON/OFF comparisons, keep SEED_N fixed across runs.
-  for (let i = 0; i < SEED_N; i++) {
-    const payload = JSON.stringify({ url: genUrl(i) });
-    const res = http.post(url, payload, params);
+  const BATCH = parseInt(__ENV.SETUP_BATCH || '50', 10);
 
-    const ok = check(res, {
-      'setup shorten -> 201': (r) => r.status === 201,
-      'setup shorten has code': (r) => !!r.json('code'),
-    });
-
-    if (!ok) {
-      // Stop early so you can inspect the failure
-      throw new Error(`Setup failed at i=${i}, status=${res.status}, body=${res.body}`);
+  for (let i = 0; i < SEED_N; i += BATCH) {
+    const reqs = [];
+    for (let j = 0; j < BATCH && i + j < SEED_N; j++) {
+      reqs.push([
+        'POST',
+        url,
+        JSON.stringify({ url: genUrl(i + j) }),
+        params,
+      ]);
     }
 
-    created.push(res.json('code'));
-  }
+    const responses = http.batch(reqs);
 
+    for (const r of responses) {
+      if (r.status !== 201) {
+        throw new Error(`Setup failed: status=${r.status} body=${r.body}`);
+      }
+      const code = r.json('code');
+      if (!code) throw new Error(`Setup missing code: status=${r.status} body=${r.body}`);
+      created.push(code);
+    }
+  }
   // hot/cold split
   const hotCount = Math.max(1, Math.floor(created.length * HOT_SET_PCT));
   const hotCodes = created.slice(0, hotCount);
@@ -200,3 +224,15 @@ export function shortenExec() {
     'shorten has code': (r) => !!r.json('code'),
   });
 }
+
+/*
+k6 run \
+  -e TARGET="yoururl" \
+  -e SEED_FILE="./seed_codes.json" \
+  -e MODE=realistic \
+  -e BASE_RPS=800 \
+  -e SPIKE_MULT=3 \
+  -e PRE_VUS=300 \
+  -e MAX_VUS=3000 \
+  loadtest.js
+*/
