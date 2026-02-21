@@ -7,10 +7,22 @@ spec:
   backoffLimit: 3  # Retry up to 3 times on failure
   template:
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       restartPolicy: OnFailure
       containers:
         - name: prisma-migrate
           image: url-shortener:dev  # 👉 Replace this with your application image name
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           command: ["pnpm"]
           args: ["prisma", "migrate", "deploy"]
           env:

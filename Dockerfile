@@ -32,12 +32,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/public ./public
-COPY package.json pnpm-lock.yaml ./
-COPY prisma ./prisma
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/public ./public
+COPY --chown=node:node package.json pnpm-lock.yaml ./
+COPY --chown=node:node prisma ./prisma
+
+USER node
 
 
 EXPOSE 3000

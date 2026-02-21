@@ -15,12 +15,24 @@ spec:
       labels:
         app: url-shortener
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ocir-secret
       containers:
         - name: url-shortener
           image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:sha-3093bb8
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 3000
               name: http
