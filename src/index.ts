@@ -3,9 +3,11 @@ import express from 'express';
 import router from './routes';
 import { errorHandler } from './middleware/errorHandler';
 import { config } from './config';
+import helmet from 'helmet';
 
 const app = express();
 
+app.use(helmet());
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.use(express.json());
