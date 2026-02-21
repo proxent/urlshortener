@@ -69,7 +69,7 @@ router.get('/r/:code', async (req, res) => {
   }
 });
 
-// 3) List links: GET /links
+/*
 router.get('/links', async (_req, res) => {
   try {
     const links = await shortenerStore.getAll();
@@ -90,5 +90,6 @@ router.get('/links', async (_req, res) => {
     return res.status(500).json({ error: 'An internal server error occurred.' });
   }
 });
+*/
 
 export default router;
