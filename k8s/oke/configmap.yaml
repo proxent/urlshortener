@@ -8,3 +8,6 @@ data:
   PORT: "3000"
   # Set to the public URL that fronts the app (e.g., LoadBalancer DNS or ingress host)
   BASE_URL: "http://141-148-185-116.nip.io"
+  TRUST_PROXY: "1"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX_SHORTEN: "60"

@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { shortenerStore } from './shortenerStore';
 import { config } from './config';
+import { shortenRateLimiter } from './middleware/rateLimit';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const isValidUrl = (value: string): boolean => {
 };
 
 // 1) Create short URL: POST /shorten
-router.post('/shorten', async (req, res) => {
+router.post('/shorten', shortenRateLimiter, async (req, res) => {
   const { url } = req.body as { url?: string };
 
   if (!url || typeof url !== 'string') {

@@ -12,6 +12,7 @@ const FILE_CODES = SEED_FILE
 // Env (tweak here)
 // --------------------
 const TARGET = (__ENV.TARGET || 'http://localhost:3000').replace(/\/$/, '');
+const LOADTEST_BYPASS_KEY = __ENV.LOADTEST_BYPASS_KEY || '';
 
 // Total target RPS (redirect + shorten combined)
 const BASE_RPS = parseInt(__ENV.BASE_RPS || '500', 10);
@@ -120,6 +121,11 @@ function genUrl(i) {
   return `https://example.com/${MODE}/${i}`;
 }
 
+function withBypassHeader(headers = {}) {
+  if (!LOADTEST_BYPASS_KEY) return headers;
+  return { ...headers, 'x-loadtest-key': LOADTEST_BYPASS_KEY };
+}
+
 // --------------------
 // Setup: seed codes
 // --------------------
@@ -139,7 +145,7 @@ export function setup() {
 
   const url = `${TARGET}/shorten`;
   const params = {
-    headers: { 'Content-Type': 'application/json' },
+    headers: withBypassHeader({ 'Content-Type': 'application/json' }),
     tags: { phase: 'setup', endpoint: 'shorten' },
     redirects: 0,
     timeout: '30s',
@@ -213,7 +219,7 @@ export function shortenExec() {
   const payload = JSON.stringify({ url: `https://example.com/new/${__VU}/${__ITER}/${Date.now()}` });
 
   const res = http.post(url, payload, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: withBypassHeader({ 'Content-Type': 'application/json' }),
     tags: { phase: 'run', endpoint: 'shorten' },
     redirects: 0,
     timeout: '10s',
@@ -228,6 +234,7 @@ export function shortenExec() {
 /*
 k6 run \
   -e TARGET="yoururl" \
+  -e LOADTEST_BYPASS_KEY="your-bypass-key" \
   -e SEED_FILE="./seed_codes.json" \
   -e MODE=realistic \
   -e BASE_RPS=800 \

@@ -7,6 +7,10 @@ import helmet from 'helmet';
 
 const app = express();
 
+if (config.TRUST_PROXY !== undefined) {
+  app.set('trust proxy', config.TRUST_PROXY);
+}
+
 app.use(helmet());
 app.use(express.static(path.join(__dirname, '../public')));
 
