@@ -1,14 +1,25 @@
-// src/routes.ts
-import { Router } from 'express';
-import { shortenerStore } from './shortenerStore';
+import { Router, type RequestHandler } from 'express';
 import { config } from './config';
-import { shortenRateLimiter } from './middleware/rateLimit';
 
-const router = Router();
+export interface ShortLink {
+  id: number;
+  originalUrl: string;
+  code: string;
+  createdAt: Date;
+  hitCount: number;
+}
 
-router.get('/', (_req, res) => {
-  res.json({ message: 'URL Shortener API ready' });
-});
+export interface ShortenerStoreLike {
+  create(originalUrl: string): Promise<ShortLink>;
+  findByCode(code: string): Promise<ShortLink | null>;
+  incrementHit(code: string): Promise<void>;
+  getAll(): Promise<ShortLink[]>;
+}
+
+export interface RouterDeps {
+  store: ShortenerStoreLike;
+  shortenRateLimiter: RequestHandler;
+}
 
 const isValidUrl = (value: string): boolean => {
   try {
@@ -20,77 +31,81 @@ const isValidUrl = (value: string): boolean => {
   }
 };
 
-// 1) Create short URL: POST /shorten
-router.post('/shorten', shortenRateLimiter, async (req, res) => {
-  const { url } = req.body as { url?: string };
+export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router => {
+  const router = Router();
 
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: 'The url field must be a string.' });
-  }
+  router.get('/', (_req, res) => {
+    res.json({ message: 'URL Shortener API ready' });
+  });
 
-  if (!isValidUrl(url)) {
-    return res.status(400).json({ error: 'The provided value is not a valid URL.' });
-  }
+  router.post('/shorten', shortenRateLimiter, async (req, res) => {
+    const { url } = req.body as { url?: string };
 
-  try {
-    const link = await shortenerStore.create(url);
-
-    const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
-    const shortUrl = `${baseUrl}/r/${link.code}`;
-
-    return res.status(201).json({
-      id: link.id,
-      originalUrl: link.originalUrl,
-      code: link.code,
-      shortUrl,
-      createdAt: link.createdAt,
-    });
-  } catch (err) {
-    console.error('[POST /shorten] error:', err);
-    return res.status(500).json({ error: 'An internal server error occurred.' });
-  }
-});
-
-// 2) Redirect: GET /r/:code
-router.get('/r/:code', async (req, res) => {
-  const { code } = req.params;
-
-  try {
-    const link = await shortenerStore.findByCode(code);
-    if (!link) {
-      return res.status(404).json({ error: 'No URL was found for the provided code.' });
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'The url field must be a string.' });
     }
 
-    await shortenerStore.incrementHit(code);
+    if (!isValidUrl(url)) {
+      return res.status(400).json({ error: 'The provided value is not a valid URL.' });
+    }
 
-    return res.redirect(302, link.originalUrl);
-  } catch (err) {
-    console.error('[GET /r/:code] error:', err);
-    return res.status(500).json({ error: 'An internal server error occurred.' });
-  }
-});
+    try {
+      const link = await store.create(url);
 
-/*
-router.get('/links', async (_req, res) => {
-  try {
-    const links = await shortenerStore.getAll();
-    const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
+      const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
+      const shortUrl = `${baseUrl}/r/${link.code}`;
 
-    const result = links.map((link) => ({
-      id: link.id,
-      originalUrl: link.originalUrl,
-      code: link.code,
-      shortUrl: `${baseUrl}/r/${link.code}`,
-      createdAt: link.createdAt,
-      hitCount: link.hitCount,
-    }));
+      return res.status(201).json({
+        id: link.id,
+        originalUrl: link.originalUrl,
+        code: link.code,
+        shortUrl,
+        createdAt: link.createdAt,
+      });
+    } catch (err) {
+      console.error('[POST /shorten] error:', err);
+      return res.status(500).json({ error: 'An internal server error occurred.' });
+    }
+  });
 
-    return res.json(result);
-  } catch (err) {
-    console.error('[GET /links] error:', err);
-    return res.status(500).json({ error: 'An internal server error occurred.' });
-  }
-});
-*/
+  router.get('/r/:code', async (req, res) => {
+    const { code } = req.params;
 
-export default router;
+    try {
+      const link = await store.findByCode(code);
+      if (!link) {
+        return res.status(404).json({ error: 'No URL was found for the provided code.' });
+      }
+
+      await store.incrementHit(code);
+
+      return res.redirect(302, link.originalUrl);
+    } catch (err) {
+      console.error('[GET /r/:code] error:', err);
+      return res.status(500).json({ error: 'An internal server error occurred.' });
+    }
+  });
+
+  router.get('/links', async (_req, res) => {
+    try {
+      const links = await store.getAll();
+      const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
+
+      const result = links.map((link) => ({
+        id: link.id,
+        originalUrl: link.originalUrl,
+        code: link.code,
+        shortUrl: `${baseUrl}/r/${link.code}`,
+        createdAt: link.createdAt,
+        hitCount: link.hitCount,
+      }));
+
+      return res.json(result);
+    } catch (err) {
+      console.error('[GET /links] error:', err);
+      return res.status(500).json({ error: 'An internal server error occurred.' });
+    }
+  });
+
+  return router;
+};

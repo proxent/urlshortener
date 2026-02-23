@@ -9,3 +9,4 @@ coverage/
 secrets.yaml
 
 seed_codes.json
+.test-dist/
