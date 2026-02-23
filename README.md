@@ -23,7 +23,8 @@ It provides:
 ```text
 src/
   index.ts                 # App entrypoint
-  routes.ts                # API routes
+  app.ts                   # Express app factory
+  routes.ts                # Router factory
   shortenerStore.ts        # Prisma data access layer
   prisma.ts                # Prisma client singleton
   config.ts                # Environment configuration
@@ -36,6 +37,8 @@ prisma/
 scripts/
   migrate-if-needed.sh
   loadtest.js
+test/
+  routes.test.ts           # Route tests (node:test)
 ```
 
 ## Environment Variables
@@ -79,6 +82,12 @@ pnpm dev
 ```
 
 Server runs at `http://localhost:3000`.
+
+### 5) Run tests
+
+```bash
+pnpm test
+```
 
 ## Run with Docker Compose
 
@@ -165,8 +174,18 @@ Response:
 - `pnpm dev` — run dev server with hot reload.
 - `pnpm build` — compile TypeScript to `dist/`.
 - `pnpm start` — run compiled app.
+- `pnpm test` — compile and run route tests with `node:test`.
 - `pnpm lint` — lint TypeScript files.
 - `pnpm loadtest` — run k6 load test from Docker.
+
+## CI/CD
+
+- **PR CI** (`.github/workflows/ci-pr.yml`)
+  - Trigger: `pull_request`
+  - Runs: dependency install + `pnpm test`
+- **OKE build/push** (`.github/workflows/oke-cd.yml`)
+  - Trigger: `workflow_dispatch`
+  - Runs tests before Docker image build/push
 
 ## Kubernetes Manifests
 
@@ -179,7 +198,7 @@ There is also an EKS example config in `eks/aws.yaml`.
 
 ## What else should you do next?
 
-Great first steps translating content and adding documentation. Recommended next actions:
+Recommended next actions:
 
 1. Add authentication/rate limiting
    - Prevent abuse of the shortening endpoint.
@@ -187,10 +206,9 @@ Great first steps translating content and adding documentation. Recommended next
    - Support links that expire and user-defined short codes.
 3. Improve observability
    - Add structured logs, metrics, and tracing.
-4. Add tests
-   - Unit tests for URL validation/store logic and integration tests for API endpoints.
+4. Expand test coverage
+   - Add store-level tests and failure-path tests (DB errors, limiter behavior, malformed JSON).
 5. Harden production config
    - Validate required environment variables and add health/readiness checks.
-6. Add CI/CD
-   - Lint/build/test/migrate checks in pull requests before deployment.
-
+6. Strengthen CI/CD
+   - Add lint/build checks and container vulnerability scanning in pull requests.
