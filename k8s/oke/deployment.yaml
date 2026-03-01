@@ -61,3 +61,10 @@ spec:
               cpu: 500m
               memory: 256Mi
       terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: url-shortener  # 현재 파일의 labels과 동일해야 합니다.
+            topologyKey: "kubernetes.io/hostname"
