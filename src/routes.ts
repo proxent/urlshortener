@@ -92,26 +92,26 @@ export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router 
     }
   });
 
-  router.get('/links', async (_req, res) => {
-    try {
-      const links = await store.getAll();
-      const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
-
-      const result = links.map((link) => ({
-        id: link.id,
-        originalUrl: link.originalUrl,
-        code: link.code,
-        shortUrl: `${baseUrl}/r/${link.code}`,
-        createdAt: link.createdAt,
-        hitCount: link.hitCount,
-      }));
-
-      return res.json(result);
-    } catch (err) {
-      console.error('[GET /links] error:', err);
-      return res.status(500).json({ error: 'An internal server error occurred.' });
-    }
-  });
+  // router.get('/links', async (_req, res) => {
+  //   try {
+  //     const links = await store.getAll();
+  //     const baseUrl = config.BASE_URL || `http://localhost:${config.PORT}`;
+  //
+  //     const result = links.map((link) => ({
+  //       id: link.id,
+  //       originalUrl: link.originalUrl,
+  //       code: link.code,
+  //       shortUrl: `${baseUrl}/r/${link.code}`,
+  //       createdAt: link.createdAt,
+  //       hitCount: link.hitCount,
+  //     }));
+  //
+  //     return res.json(result);
+  //   } catch (err) {
+  //     console.error('[GET /links] error:', err);
+  //     return res.status(500).json({ error: 'An internal server error occurred.' });
+  //   }
+  // });
 
   return router;
 };

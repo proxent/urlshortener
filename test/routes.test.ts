@@ -209,21 +209,9 @@ test('GET /r/:code redirects and increments hit count', async () => {
 
   assert.equal(res.redirectCode, 302);
   assert.equal(res.redirectUrl, 'https://example.com/redirect-target');
-
-  const listRes = createMockRes();
-  await invokeRoute({
-    router,
-    method: 'get',
-    path: '/links',
-    req: {},
-    res: listRes,
-  });
-
-  const links = listRes.jsonBody as Array<{ code: string; hitCount: number }>;
-  const link = links.find((item) => item.code === created.code);
-
-  assert.ok(link);
-  assert.equal(link.hitCount, 1);
+  const updated = await store.findByCode(created.code);
+  assert.ok(updated);
+  assert.equal(updated.hitCount, 1);
 });
 
 test('GET /r/:code returns 404 for unknown code', async () => {
