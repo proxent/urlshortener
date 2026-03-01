@@ -21,10 +21,17 @@ export interface RouterDeps {
   shortenRateLimiter: RequestHandler;
 }
 
+const MAX_ORIGINAL_URL_LENGTH = 2048;
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
+
 const isValidUrl = (value: string): boolean => {
+  if (value.length > MAX_ORIGINAL_URL_LENGTH) {
+    return false;
+  }
+
   try {
-    new URL(value);
-    return true;
+    const parsed = new URL(value);
+    return ALLOWED_PROTOCOLS.has(parsed.protocol);
   } catch {
     return false;
   }

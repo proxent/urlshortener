@@ -137,6 +137,41 @@ test('POST /shorten returns 400 for invalid payload', async () => {
   assert.match(String((res.jsonBody as { error: string }).error), /valid URL/i);
 });
 
+test('POST /shorten returns 400 for non-http protocol', async () => {
+  const store = new InMemoryStore();
+  const router = createRouter({ store, shortenRateLimiter: noOpRateLimiter });
+  const res = createMockRes();
+
+  await invokeRoute({
+    router,
+    method: 'post',
+    path: '/shorten',
+    req: { body: { url: 'javascript:alert(1)' } },
+    res,
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.match(String((res.jsonBody as { error: string }).error), /valid URL/i);
+});
+
+test('POST /shorten returns 400 for too long url', async () => {
+  const store = new InMemoryStore();
+  const router = createRouter({ store, shortenRateLimiter: noOpRateLimiter });
+  const res = createMockRes();
+  const longPath = 'a'.repeat(2050);
+
+  await invokeRoute({
+    router,
+    method: 'post',
+    path: '/shorten',
+    req: { body: { url: `https://example.com/${longPath}` } },
+    res,
+  });
+
+  assert.equal(res.statusCode, 400);
+  assert.match(String((res.jsonBody as { error: string }).error), /valid URL/i);
+});
+
 test('POST /shorten creates short url', async () => {
   const store = new InMemoryStore();
   const router = createRouter({ store, shortenRateLimiter: noOpRateLimiter });
