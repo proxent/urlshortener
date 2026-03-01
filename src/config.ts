@@ -31,7 +31,9 @@ const parseTrustProxy = (value: string | undefined): TrustProxy | undefined => {
   return value;
 };
 
-const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY || (NODE_ENV === 'production' ? '1' : undefined));
+const TRUST_PROXY = parseTrustProxy(
+  process.env.TRUST_PROXY || (NODE_ENV === 'production' ? '1' : undefined),
+);
 
 if (!BASE_URL) {
   // Warn when BASE_URL is missing in a deployed environment
