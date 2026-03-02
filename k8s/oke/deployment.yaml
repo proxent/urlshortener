@@ -26,7 +26,7 @@ spec:
         - name: ocir-secret
       containers:
         - name: url-shortener
-          image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:sha-8303e2e
+          image: phx.ocir.io/ax4dlruayn0q/url-shortener-repository:sha-f108aaf
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
