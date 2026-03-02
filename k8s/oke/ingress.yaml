@@ -3,9 +3,16 @@ kind: Ingress
 metadata:
   name: url-shortener-ingress
   namespace: url-shortener
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   # Set to your ingress class if you install one (e.g., nginx, oci)
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - 141-148-185-116.nip.io
+      secretName: url-shortener-tls
   rules:
     - host: 141-148-185-116.nip.io
       http:
