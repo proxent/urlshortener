@@ -5,7 +5,7 @@ metadata:
 spec:
   acme:
     # Replace with your email for ACME account notifications/recovery
-    email: devops@example.com
+    email: chanjin97gm@gmail.com
     # Staging endpoint: safe for testing without Let's Encrypt production limits
     server: https://acme-staging-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
