@@ -1,7 +1,8 @@
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: Issuer
 metadata:
   name: letsencrypt-staging
+  namespace: url-shortener
 spec:
   acme:
     # Replace with your email for ACME account notifications/recovery
@@ -16,9 +17,10 @@ spec:
             ingressClassName: nginx
 ---
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: Issuer
 metadata:
   name: letsencrypt-prod
+  namespace: url-shortener
 spec:
   acme:
     # Replace with your email for ACME account notifications/recovery

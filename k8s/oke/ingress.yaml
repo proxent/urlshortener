@@ -4,7 +4,7 @@ metadata:
   name: url-shortener-ingress
   namespace: url-shortener
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/issuer: letsencrypt-staging
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   # Set to your ingress class if you install one (e.g., nginx, oci)
