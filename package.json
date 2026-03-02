@@ -7,7 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "pnpm prisma generate && tsc",
     "start": "node dist/index.js",
-    "test": "pnpm test:compile && node --test .test-dist/test/**/*.test.js",
+    "test": "pnpm test:compile && node --test .test-dist/test/*.test.js",
     "test:compile": "tsc -p tsconfig.test.json",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
