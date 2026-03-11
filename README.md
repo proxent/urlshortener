@@ -1,22 +1,25 @@
 # URL Shortener
 
-A simple URL shortener service built with **Node.js**, **Express**, **TypeScript**, and **Prisma**.
+A URL shortener service built with Node.js, Express 5, TypeScript, Prisma, and PostgreSQL.
 
-It provides:
-- A REST API to create short URLs.
-- Redirect support from short codes to original URLs.
-- A basic web UI to create and view links.
-- PostgreSQL-backed storage.
+Current behavior:
+- Serves a minimal browser UI at `/` for creating short URLs
+- Accepts `POST /shorten` requests with strict URL validation
+- Redirects `GET /r/:code` requests and increments hit counts
+- Applies configurable rate limiting to the shorten endpoint
+- Ships with Docker Compose, k6 load-test tooling, and Kubernetes manifests for generic clusters and OKE
 
 ## Tech Stack
 
-- Node.js + Express 5
+- Node.js
+- Express 5
 - TypeScript
 - Prisma ORM
 - PostgreSQL
 - pnpm
 - Docker / Docker Compose
-- Kubernetes manifests (`k8s/`)
+- k6
+- Kubernetes
 
 ## Project Structure
 
@@ -24,21 +27,32 @@ It provides:
 src/
   index.ts                 # App entrypoint
   app.ts                   # Express app factory
-  routes.ts                # Router factory
-  shortenerStore.ts        # Prisma data access layer
+  routes.ts                # API routes and validation
+  shortenerStore.ts        # Prisma-backed data access
   prisma.ts                # Prisma client singleton
-  config.ts                # Environment configuration
-  middleware/errorHandler.ts
+  config.ts                # Environment parsing and validation
+  middleware/
+    errorHandler.ts        # Sanitized 500 responses in production
+    rateLimit.ts           # /shorten limiter with optional bypass header
+  types/
+    express.d.ts
 public/
-  index.html               # Minimal frontend UI
+  index.html               # Minimal frontend
+  app.js                   # Frontend submit/render logic
 prisma/
   schema.prisma            # DB schema
   migrations/              # Prisma migrations
 scripts/
-  migrate-if-needed.sh
-  loadtest.js
+  migrate-if-needed.sh     # Compose migration guard
+  loadtest.js              # k6 scenario
+  make_seeds.js            # Generate seed codes for load tests
 test/
-  routes.test.ts           # Route tests (node:test)
+  routes.test.ts           # Route tests with node:test
+k8s/
+  app/                     # Generic Kubernetes manifests
+  oke/                     # Oracle Kubernetes Engine manifests
+eks/
+  aws.yaml                 # Example eksctl cluster config
 ```
 
 ## Environment Variables
@@ -46,11 +60,19 @@ test/
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `NODE_ENV` | No | `development` | Runtime environment |
-| `PORT` | No | `3000` | Server port |
-| `BASE_URL` | No | `http://localhost:<PORT>` in non-production | Base URL used when generating `shortUrl` responses |
-| `DATABASE_URL` | Yes (for DB operations) | - | PostgreSQL connection string |
+| `PORT` | No | `3000` | HTTP port |
+| `BASE_URL` | In production | `http://localhost:<PORT>` outside production | Base URL used in returned `shortUrl` values |
+| `DATABASE_URL` | Yes for DB-backed runs | - | PostgreSQL connection string |
+| `RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate-limit window for `POST /shorten` |
+| `RATE_LIMIT_MAX_SHORTEN` | No | `60` | Max shorten requests allowed per window |
+| `LOADTEST_BYPASS_KEY` | No | empty | Shared secret accepted in the `x-loadtest-key` header to skip rate limiting |
+| `TRUST_PROXY` | No | `1` in production, unset otherwise | Express `trust proxy` setting |
 
-## Local Development (without Docker)
+Notes:
+- `BASE_URL` must be an absolute `http` or `https` URL.
+- In production, `BASE_URL` cannot point at `localhost`, `127.0.0.1`, or `::1`.
+
+## Local Development
 
 ### 1) Install dependencies
 
@@ -67,21 +89,24 @@ NODE_ENV=development
 PORT=3000
 BASE_URL=http://localhost:3000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/urlshortener
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_SHORTEN=60
+TRUST_PROXY=false
 ```
 
-### 3) Run DB migration
+### 3) Apply migrations
 
 ```bash
 pnpm prisma migrate deploy
 ```
 
-### 4) Start development server
+### 4) Start the dev server
 
 ```bash
 pnpm dev
 ```
 
-Server runs at `http://localhost:3000`.
+The app will be available at `http://localhost:3000`.
 
 ### 5) Run tests
 
@@ -89,34 +114,26 @@ Server runs at `http://localhost:3000`.
 pnpm test
 ```
 
-## Run with Docker Compose
+## Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
 This starts:
-- `db` (PostgreSQL)
-- `migrate` (Prisma migration job)
-- `app` (URL shortener service)
+- `db` for PostgreSQL
+- `migrate` to run `scripts/migrate-if-needed.sh`
+- `app` for the Express service
 
-Open `http://localhost:3000` after containers are ready.
+Open `http://localhost:3000` after the containers are healthy.
 
-## API
+## HTTP Behavior
 
-### Health / root
+### `GET /`
 
-```http
-GET /
-```
+Serves the static frontend from `public/index.html`.
 
-Response:
-
-```json
-{ "message": "URL Shortener API ready" }
-```
-
-### Create short URL
+### `POST /shorten`
 
 ```http
 POST /shorten
@@ -135,80 +152,82 @@ Success (`201`):
   "originalUrl": "https://example.com",
   "code": "Ab12Cd34",
   "shortUrl": "http://localhost:3000/r/Ab12Cd34",
-  "createdAt": "2025-01-01T00:00:00.000Z"
+  "createdAt": "2026-03-10T00:00:00.000Z"
 }
 ```
 
-### Redirect to original URL
+Validation and error behavior:
+- Only `http` and `https` URLs are accepted
+- URLs longer than 2048 characters are rejected
+- Invalid payloads return `400`
+- Rate-limited requests return `429`
+- Unexpected failures return `500`
 
-```http
-GET /r/:code
-```
+### `GET /r/:code`
 
-- Redirects with `302` when found.
-- Returns `404` if code does not exist.
+- Returns a `302` redirect to the original URL when the code exists
+- Increments `hitCount` in the database before redirecting
+- Returns `404` when the code is unknown
 
-### List links
-
-```http
-GET /links
-```
-
-Response:
-
-```json
-[
-  {
-    "id": 1,
-    "originalUrl": "https://example.com",
-    "code": "Ab12Cd34",
-    "shortUrl": "http://localhost:3000/r/Ab12Cd34",
-    "createdAt": "2025-01-01T00:00:00.000Z",
-    "hitCount": 3
-  }
-]
-```
+There is currently no public `GET /links` endpoint in the app.
 
 ## Scripts
 
-- `pnpm dev` — run dev server with hot reload.
-- `pnpm build` — compile TypeScript to `dist/`.
-- `pnpm start` — run compiled app.
-- `pnpm test` — compile and run route tests with `node:test`.
-- `pnpm lint` — lint TypeScript files.
-- `pnpm loadtest` — run k6 load test from Docker.
+- `pnpm dev` runs the TypeScript app with `ts-node-dev`
+- `pnpm build` runs `prisma generate` and compiles to `dist/`
+- `pnpm start` runs the compiled app
+- `pnpm test` compiles tests with `tsconfig.test.json` and runs them with `node:test`
+- `pnpm lint` runs ESLint on `src/**/*.{ts,tsx}`
+- `pnpm lint:fix` runs ESLint with fixes
+- `pnpm format` formats `src/**/*.{ts,tsx}` with Prettier
+- `pnpm format:check` checks formatting
+- `pnpm loadtest` runs the default k6 scenario in Docker
+
+## Load Testing
+
+`scripts/loadtest.js` models mixed redirect and shorten traffic, supports hot/cold key distributions, and can optionally bypass the shorten rate limit with `x-loadtest-key`.
+
+Useful helpers:
+- `scripts/make_seeds.js` pre-creates short codes and writes them to JSON
+- `LOADTEST_BYPASS_KEY` lets load tests avoid being throttled by the app limiter
 
 ## CI/CD
 
-- **PR CI** (`.github/workflows/ci-pr.yml`)
+- `.github/workflows/ci-pr.yml`
   - Trigger: `pull_request`
-  - Runs: dependency install + `pnpm test`
-- **OKE build/push** (`.github/workflows/oke-cd.yml`)
+  - Runs `pnpm install --frozen-lockfile`, `pnpm test`, and `pnpm build`
+- `.github/workflows/oke-cd.yml`
   - Trigger: `workflow_dispatch`
-  - Runs tests before Docker image build/push
+  - Runs tests, builds an ARM64 image, pushes it to OCIR, and prints the image tag for manual deployment sync
 
-## Kubernetes Manifests
+## Kubernetes
 
-This repository includes Kubernetes manifests under:
-- `k8s/app/`
-- `k8s/postgresql/`
-- `k8s/oke/`
+### `k8s/app/`
 
-There is also an EKS example config in `eks/aws.yaml`.
+Generic manifests for running the app in a cluster:
+- Namespace, ConfigMap, and example Secret
+- Deployment with non-root security context, probes, and resource requests/limits
+- Service and Ingress
+- HorizontalPodAutoscaler
 
-## What else should you do next?
+### `k8s/oke/`
 
-Recommended next actions:
+Oracle Kubernetes Engine-focused manifests:
+- OCIR-backed Deployment and separate migration Job
+- ConfigMap plus secrets sourced through External Secrets
+- `SecretStore` for OCI Vault
+- NGINX ingress with TLS enabled through cert-manager `Issuer` resources
+- Pod anti-affinity for better placement across nodes
 
-1. Add authentication/rate limiting
-   - Prevent abuse of the shortening endpoint.
-2. Add expiration and custom aliases
-   - Support links that expire and user-defined short codes.
-3. Improve observability
-   - Add structured logs, metrics, and tracing.
-4. Expand test coverage
-   - Add store-level tests and failure-path tests (DB errors, limiter behavior, malformed JSON).
-5. Harden production config
-   - Validate required environment variables and add health/readiness checks.
-6. Strengthen CI/CD
-   - Add lint/build checks and container vulnerability scanning in pull requests.
+### `eks/aws.yaml`
+
+An example `eksctl` cluster configuration for AWS EKS. It is not wired into the current deployment workflow, but it is kept as a reference starting point.
+
+## Next Improvements
+
+1. Add dedicated health and readiness endpoints instead of relying on `/`
+2. Add custom aliases and link expiration support
+3. Add structured logging, metrics, and tracing
+4. Expand tests to cover app-level middleware behavior and Prisma-backed paths
+5. Add a safe admin/listing surface if operational visibility into created links is needed
+6. Automate deployment promotion after image build instead of relying on a manual sync step
