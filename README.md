@@ -2,12 +2,44 @@
 
 A URL shortener service built with Node.js, Express 5, TypeScript, Prisma, and PostgreSQL.
 
-Current behavior:
+Highlights:
 - Serves a minimal browser UI at `/` for creating short URLs
 - Accepts `POST /shorten` requests with strict URL validation
 - Redirects `GET /r/:code` requests and increments hit counts
 - Applies configurable rate limiting to the shorten endpoint
 - Ships with Docker Compose, k6 load-test tooling, and Kubernetes manifests for generic clusters and OKE
+
+## Quick Start
+
+If you want to try the app before reading the rest of the repository, use Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Once the containers are healthy:
+- Open `http://localhost:3000` for the browser UI
+- Or create a short URL directly with:
+
+```bash
+curl -X POST http://localhost:3000/shorten \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com"}'
+```
+
+Expected response:
+
+```json
+{
+  "id": 1,
+  "originalUrl": "https://example.com",
+  "code": "Ab12Cd34",
+  "shortUrl": "http://localhost:3000/r/Ab12Cd34",
+  "createdAt": "2026-03-10T00:00:00.000Z"
+}
+```
+
+If you prefer running the app without Docker, jump to [Local Development](#local-development).
 
 ## Tech Stack
 
@@ -20,6 +52,10 @@ Current behavior:
 - Docker / Docker Compose
 - k6
 - Kubernetes
+- Github Actions
+- Argo CD
+- Oracle Cloud Infrastructure
+- 
 
 ## Project Structure
 
@@ -71,6 +107,13 @@ eks/
 Notes:
 - `BASE_URL` must be an absolute `http` or `https` URL.
 - In production, `BASE_URL` cannot point at `localhost`, `127.0.0.1`, or `::1`.
+
+## Prerequisites
+
+For local development without Docker, you will need:
+- A recent LTS version of Node.js
+- pnpm
+- PostgreSQL
 
 ## Local Development
 
