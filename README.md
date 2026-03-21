@@ -4,6 +4,7 @@ A URL shortener service built with Node.js, Express 5, TypeScript, Prisma, and P
 
 Highlights:
 - Serves a minimal browser UI at `/` for creating short URLs
+- Exposes dedicated `GET /healthz` and `GET /readyz` probe endpoints
 - Accepts `POST /shorten` requests with strict URL validation
 - Redirects `GET /r/:code` requests and increments hit counts
 - Applies configurable rate limiting to the shorten endpoint
@@ -19,6 +20,7 @@ docker compose up --build
 
 Once the containers are healthy:
 - Open `http://localhost:3000` for the browser UI
+- Probe `http://localhost:3000/healthz` or `http://localhost:3000/readyz`
 - Or create a short URL directly with:
 
 ```bash
@@ -175,6 +177,25 @@ Open `http://localhost:3000` after the containers are healthy.
 ### `GET /`
 
 Serves the static frontend from `public/index.html`.
+
+### `GET /healthz`
+
+Returns `200` when the process is up and able to serve traffic.
+
+Example response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### `GET /readyz`
+
+Runs a backing-store readiness check.
+
+- Returns `200` with `{ "status": "ready" }` when the app can reach its store
+- Returns `503` with `{ "status": "not ready" }` when the readiness check fails
 
 ### `POST /shorten`
 

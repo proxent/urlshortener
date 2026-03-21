@@ -43,13 +43,13 @@ spec:
                 name: url-shortener-secrets
           readinessProbe:
             httpGet:
-              path: /
+              path: /readyz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20

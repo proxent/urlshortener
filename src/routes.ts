@@ -40,10 +40,6 @@ const isValidUrl = (value: string): boolean => {
 export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router => {
   const router = Router();
 
-  router.get('/', (_req, res) => {
-    res.json({ message: 'URL Shortener API ready' });
-  });
-
   router.post('/shorten', shortenRateLimiter, async (req, res) => {
     const { url } = req.body as { url?: string };
 

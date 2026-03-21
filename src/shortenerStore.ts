@@ -10,6 +10,10 @@ export interface ShortLink {
 }
 
 class PrismaShortenerStore {
+  async checkReadiness(): Promise<void> {
+    await prisma.$queryRaw`SELECT 1`;
+  }
+
   async create(originalUrl: string): Promise<ShortLink> {
     const link = await prisma.url.create({
       data: {
