@@ -5,10 +5,11 @@ A URL shortener service built with Node.js, Express 5, TypeScript, Prisma, and P
 Highlights:
 - Serves a minimal browser UI at `/` for creating short URLs
 - Exposes dedicated `GET /healthz` and `GET /readyz` probe endpoints
+- Exposes a Prometheus-compatible `GET /metrics` endpoint
 - Accepts `POST /shorten` requests with strict URL validation
 - Redirects `GET /r/:code` requests and increments hit counts
 - Applies configurable rate limiting to the shorten endpoint
-- Ships with Docker Compose, k6 load-test tooling, and Kubernetes manifests for generic clusters and OKE
+- Ships with Docker Compose, k6 load-test tooling, Kubernetes manifests for generic clusters and OKE, and a monitoring bundle for Prometheus/Grafana
 
 ## Quick Start
 
@@ -65,6 +66,7 @@ If you prefer running the app without Docker, jump to [Local Development](#local
 src/
   index.ts                 # App entrypoint
   app.ts                   # Express app factory
+  metrics.ts               # Prometheus instrumentation and /metrics handler
   routes.ts                # API routes and validation
   shortenerStore.ts        # Prisma-backed data access
   prisma.ts                # Prisma client singleton
@@ -88,6 +90,7 @@ test/
   routes.test.ts           # Route tests with node:test
 k8s/
   app/                     # Generic Kubernetes manifests
+  monitoring/              # Prometheus/Grafana and postgres-exporter manifests
   oke/                     # Oracle Kubernetes Engine manifests
 eks/
   aws.yaml                 # Example eksctl cluster config
@@ -196,6 +199,14 @@ Runs a backing-store readiness check.
 
 - Returns `200` with `{ "status": "ready" }` when the app can reach its store
 - Returns `503` with `{ "status": "not ready" }` when the readiness check fails
+
+### `GET /metrics`
+
+Returns Prometheus text-format metrics for:
+- Default Node.js process/runtime metrics from `prom-client`
+- HTTP request count and latency buckets labeled by method, route template, and status code
+
+For the full Kubernetes observability setup used during load testing, see `k8s/monitoring/README.md`.
 
 ### `POST /shorten`
 

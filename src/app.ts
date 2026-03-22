@@ -5,6 +5,7 @@ import { config } from './config';
 import { createRouter, type ShortenerStoreLike } from './routes';
 import { shortenRateLimiter } from './middleware/rateLimit';
 import { errorHandler } from './middleware/errorHandler';
+import { metricsHandler, prometheusMiddleware } from './metrics';
 
 export interface AppStoreLike extends ShortenerStoreLike {
   checkReadiness(): Promise<void>;
@@ -22,6 +23,7 @@ export const createApp = ({ store }: AppDeps) => {
   }
 
   app.use(helmet());
+  app.get('/metrics', metricsHandler);
 
   app.get('/healthz', (_req, res) => {
     res.status(200).json({ status: 'ok' });
@@ -39,6 +41,7 @@ export const createApp = ({ store }: AppDeps) => {
 
   app.use(express.static(path.join(__dirname, '../public')));
   app.use(express.json());
+  app.use(prometheusMiddleware);
 
   app.use('/', createRouter({ store, shortenRateLimiter }));
   app.use(errorHandler);

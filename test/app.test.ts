@@ -31,7 +31,11 @@ class TestStore implements AppStoreLike {
 
 type MockRes = {
   statusCode: number;
+  bodyText?: string;
+  headers: Record<string, string>;
   jsonBody?: unknown;
+  end: (body?: string) => MockRes;
+  setHeader: (name: string, value: string) => MockRes;
   status: (code: number) => MockRes;
   json: (body: unknown) => MockRes;
 };
@@ -39,6 +43,15 @@ type MockRes = {
 const createMockRes = (): MockRes => {
   const res: MockRes = {
     statusCode: 200,
+    headers: {},
+    end(body?: string) {
+      res.bodyText = body;
+      return res;
+    },
+    setHeader(name: string, value: string) {
+      res.headers[name.toLowerCase()] = value;
+      return res;
+    },
     status(code: number) {
       res.statusCode = code;
       return res;
@@ -134,4 +147,13 @@ test('GET /readyz returns 503 when the store is not ready', async () => {
 
   assert.equal(response.statusCode, 503);
   assert.deepEqual(response.jsonBody, { status: 'not ready' });
+});
+
+test('GET /metrics exposes Prometheus metrics', async () => {
+  const response = await invokeAppRoute(new TestStore(true), '/metrics');
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers['content-type'], /text\/plain/);
+  assert.match(response.bodyText ?? '', /process_cpu_user_seconds_total/);
+  assert.match(response.bodyText ?? '', /# TYPE http_request_duration_seconds histogram/);
 });
