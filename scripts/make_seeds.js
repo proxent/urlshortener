@@ -14,6 +14,7 @@ const target = (arg('target', 'http://localhost:3000') || '').replace(/\/$/, '')
 const n = parseInt(arg('n', '20000'), 10);
 const out = arg('out', 'seed_codes.json');
 const concurrency = parseInt(arg('concurrency', '50'), 10);
+const bypassKey = 'bypass';
 
 function genUrl(i) {
   return `https://example.com/seed/${i}`;
@@ -22,7 +23,10 @@ function genUrl(i) {
 async function postShorten(i) {
   const res = await fetch(`${target}/shorten`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-loadtest-key': bypassKey,
+    },
     body: JSON.stringify({ url: genUrl(i) }),
   });
 
