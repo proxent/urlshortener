@@ -2,87 +2,43 @@
 
 This guide assumes:
 - your app is running in Kubernetes
-- `kube-prometheus-stack` is installed
-- `url-shortener` and `postgres-exporter` `ServiceMonitor` objects are applied
+- Prometheus, Grafana, and `postgres-exporter` are running on the Jump VM via `monitoring/docker-compose.yml`
 
-If those pieces are not in place yet, run the steps in [README.md](/home/alphacent/urlshortener/k8s/monitoring/README.md) first.
+If those pieces are not in place yet, bring up the Jump VM monitoring stack first.
 
-## 1. Install the Monitoring Stack
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --create-namespace \
-  --version 82.12.0 \
-  -f k8s/monitoring/kube-prometheus-stack-values.yaml \
-  --wait
-
-kubectl apply -f k8s/monitoring/url-shortener-servicemonitor.yaml
-kubectl apply -f k8s/monitoring/postgres-exporter-servicemonitor.yaml
-```
-
-If PostgreSQL exporter is not installed yet, install it as well:
+## 1. Start the Monitoring Stack on the Jump VM
 
 ```bash
-kubectl apply -f k8s/monitoring/postgres-exporter-secret.example.yaml
-
-helm upgrade --install postgres-exporter prometheus-community/prometheus-postgres-exporter \
-  --namespace monitoring \
-  --version 7.5.0 \
-  -f k8s/monitoring/postgres-exporter-values.yaml \
-  --wait
+cp monitoring/.env.example monitoring/.env
+# Edit monitoring/.env with the real Grafana password and Postgres exporter DSN.
+docker compose -f monitoring/docker-compose.yml up -d
 ```
+
+The stack includes:
+
+- Prometheus
+- Grafana
+- `postgres-exporter`
 
 ## 2. Check That Prometheus Sees the Targets
 
 ```bash
-kubectl get servicemonitors -A
-kubectl get pods -n monitoring
+docker compose -f monitoring/docker-compose.yml ps
 ```
 
-Then port-forward Prometheus if you want to inspect targets directly:
-
-```bash
-kubectl port-forward -n monitoring svc/monitoring-kube-prometheus-prometheus 9090:9090
-```
-
-Open `http://localhost:9090/targets` and confirm these targets are `UP`:
+Open `http://<jump-vm-ip>:9090/targets` and confirm these targets are `UP`:
 - `url-shortener`
 - `postgres-exporter`
 
 ## 3. Open Grafana
 
-Get the admin password:
-
-```bash
-kubectl get secret -n monitoring monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d && echo
-```
-
-Port-forward Grafana:
-
-```bash
-kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
-```
-
-Open `http://localhost:3000`.
+Open `http://<jump-vm-ip>:3000`.
 
 Login:
-- Username: `admin`
-- Password: output from the command above
+- Username: value from `GRAFANA_ADMIN_USER` in `monitoring/.env`
+- Password: value from `GRAFANA_ADMIN_PASSWORD` in `monitoring/.env`
 
-The Helm chart usually provisions Prometheus as a datasource automatically. Check it here:
-- `Connections`
-- `Data sources`
-- confirm `Prometheus` exists
-
-If it does not exist, add one manually:
-- Type: `Prometheus`
-- URL: `http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090`
-- Access: default is usually fine
-- Click `Save & test`
+The Docker Compose setup provisions the `Prometheus` datasource automatically.
 
 ## 4. Import the Recommended Dashboards
 
@@ -105,21 +61,21 @@ Recommended dashboard IDs:
 - `15760` Kubernetes / Views / Pods
 
 There is also a local dashboard JSON in this repo:
-- `k8s/monitoring/url-shortener-benchmark-dashboard.json`
+- `monitoring/url-shortener-benchmark-dashboard.json`
 
 To import the local JSON:
 - Click `Dashboards`
 - Click `New`
 - Click `Import`
 - Click `Upload dashboard JSON file`
-- Choose `k8s/monitoring/url-shortener-benchmark-dashboard.json`
+- Choose `monitoring/url-shortener-benchmark-dashboard.json`
 - Pick the `Prometheus` datasource
 - Click `Import`
 
 Use them like this:
 - NodeJS dashboards: app CPU, heap, event loop, request latency
 - PostgreSQL dashboards: query load, locks, transactions, cache hit, connections
-- Kubernetes dashboards: pod saturation, node pressure, restarts, network
+- Kubernetes dashboards: pod saturation, node pressure, restarts, network, if you later add cluster scraping again
 
 ## 5. Build a Small Custom Performance Dashboard
 

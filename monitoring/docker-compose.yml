@@ -29,7 +29,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ../k8s/monitoring/url-shortener-benchmark-dashboard.json:/var/lib/grafana/dashboards/url-shortener-benchmark-dashboard.json:ro
+      - ./url-shortener-benchmark-dashboard.json:/var/lib/grafana/dashboards/url-shortener-benchmark-dashboard.json:ro
     restart: unless-stopped
 
   postgres-exporter:

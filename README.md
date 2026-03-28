@@ -88,9 +88,11 @@ scripts/
   make_seeds.js            # Generate seed codes for load tests
 test/
   routes.test.ts           # Route tests with node:test
+monitoring/
+  docker-compose.yml       # Jump VM monitoring stack (Prometheus/Grafana/postgres-exporter)
+  prometheus.yml           # Prometheus scrape config for the external monitoring stack
+  README.md                # Monitoring setup and Grafana workflow
 k8s/
-  app/                     # Generic Kubernetes manifests
-  monitoring/              # Prometheus/Grafana and postgres-exporter manifests
   oke/                     # Oracle Kubernetes Engine manifests
 eks/
   aws.yaml                 # Example eksctl cluster config
@@ -206,7 +208,7 @@ Returns Prometheus text-format metrics for:
 - Default Node.js process/runtime metrics from `prom-client`
 - HTTP request count and latency buckets labeled by method, route template, and status code
 
-For the full Kubernetes observability setup used during load testing, see `k8s/monitoring/README.md`.
+For the current external monitoring setup used during load testing, see `monitoring/docker-compose.yml`, `monitoring/prometheus.yml`, and `monitoring/GRAFANA.md`.
 
 ### `POST /shorten`
 
