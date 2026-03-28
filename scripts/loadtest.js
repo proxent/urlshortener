@@ -1,8 +1,13 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { SharedArray } from 'k6/data';
+import { Counter, Rate, Trend } from 'k6/metrics';
 
 const SEED_FILE = __ENV.SEED_FILE || ''; // e.g. ./seed_codes.json
+
+if (!SEED_FILE) {
+  throw new Error('SEED_FILE is required. Restore the DB first, then provide a fixed seed file.');
+}
 
 const FILE_CODES = SEED_FILE
   ? new SharedArray('seed_codes', () => JSON.parse(open(SEED_FILE)))
@@ -22,9 +27,6 @@ const SPIKE_MULT = parseFloat(__ENV.SPIKE_MULT || '3');
 const REDIRECT_RATIO = parseFloat(__ENV.REDIRECT_RATIO || '0.98'); // 98%
 const SHORTEN_RATIO = 1 - REDIRECT_RATIO;
 
-// Seed dataset size (existing codes created in setup)
-const SEED_N = parseInt(__ENV.SEED_N || '20000', 10);
-
 // Hot key modeling
 // - hot set size = HOT_SET_PCT of total codes
 // - HOT_RATIO of redirects hit hot set (rest hit cold set)
@@ -42,6 +44,19 @@ if (MODE === 'warm') HOT_RATIO = 0.9;
 // VU allocation (arrival-rate requires enough VUs to keep up)
 const PRE_VUS = parseInt(__ENV.PRE_VUS || '200', 10);
 const MAX_VUS = parseInt(__ENV.MAX_VUS || '2000', 10);
+
+const redirectSuccessRate = new Rate('redirect_success_rate');
+const shortenSuccessRate = new Rate('shorten_success_rate');
+const redirectStatusCount = new Counter('redirect_status_total');
+const shortenStatusCount = new Counter('shorten_status_total');
+const redirectDuration = new Trend('redirect_duration_ms');
+const shortenDuration = new Trend('shorten_duration_ms');
+const redirectWaiting = new Trend('redirect_waiting_ms');
+const shortenWaiting = new Trend('shorten_waiting_ms');
+const redirectConnecting = new Trend('redirect_connecting_ms');
+const shortenConnecting = new Trend('shorten_connecting_ms');
+const redirectTlsHandshaking = new Trend('redirect_tls_handshaking_ms');
+const shortenTlsHandshaking = new Trend('shorten_tls_handshaking_ms');
 
 // Prevent following redirects (measure only the 302 response)
 export const options = (() => {
@@ -69,9 +84,15 @@ export const options = (() => {
 
       // Redirect SLO (tune numbers as you like)
       'http_req_duration{phase:run,endpoint:redirect}': ['p(95)<100', 'p(99)<250'],
+      redirect_duration_ms: ['p(95)<100', 'p(99)<250'],
+      redirect_waiting_ms: ['p(95)<100', 'p(99)<250'],
+      redirect_success_rate: ['rate>0.99'],
 
       // Shorten SLO
       'http_req_duration{phase:run,endpoint:shorten}': ['p(95)<300', 'p(99)<800'],
+      shorten_duration_ms: ['p(95)<300', 'p(99)<800'],
+      shorten_waiting_ms: ['p(95)<300', 'p(99)<800'],
+      shorten_success_rate: ['rate>0.99'],
 
       // If dropped iterations occur, the generator couldn't keep up (VU shortage / client-side bottleneck)
       'dropped_iterations{phase:run}': ['count==0'],
@@ -116,73 +137,26 @@ function pickCodeSkewed(codes, hotCodes, coldCodes) {
   return coldCodes[randInt(coldCodes.length)];
 }
 
-function genUrl(i) {
-  // Must pass isValidUrl (the URL does not need to be reachable)
-  return `https://example.com/${MODE}/${i}`;
-}
-
 function withBypassHeader(headers = {}) {
   if (!LOADTEST_BYPASS_KEY) return headers;
   return { ...headers, 'x-loadtest-key': LOADTEST_BYPASS_KEY };
 }
 
 // --------------------
-// Setup: seed codes
+// Setup: load fixed seed codes
 // --------------------
 export function setup() {
-
-  if (FILE_CODES && FILE_CODES.length > 0) {
-    const createdCodes = Array.from(FILE_CODES);
-
-    const hotCount = Math.max(1, Math.floor(createdCodes.length * HOT_SET_PCT));
-    const hotCodes = createdCodes.slice(0, hotCount);
-    const coldCodes = createdCodes.slice(hotCount);
-
-    return { codes: createdCodes, hotCodes, coldCodes };
+  if (!FILE_CODES || FILE_CODES.length === 0) {
+    throw new Error(`Seed file is empty or unreadable: ${SEED_FILE}`);
   }
 
-  const created = [];
+  const createdCodes = Array.from(FILE_CODES);
 
-  const url = `${TARGET}/shorten`;
-  const params = {
-    headers: withBypassHeader({ 'Content-Type': 'application/json' }),
-    tags: { phase: 'setup', endpoint: 'shorten' },
-    redirects: 0,
-    timeout: '30s',
-  };
+  const hotCount = Math.max(1, Math.floor(createdCodes.length * HOT_SET_PCT));
+  const hotCodes = createdCodes.slice(0, hotCount);
+  const coldCodes = createdCodes.slice(hotCount);
 
-  // If SEED_N is too large, setup will take longer and the DB will grow.
-  // For cache ON/OFF comparisons, keep SEED_N fixed across runs.
-  const BATCH = parseInt(__ENV.SETUP_BATCH || '50', 10);
-
-  for (let i = 0; i < SEED_N; i += BATCH) {
-    const reqs = [];
-    for (let j = 0; j < BATCH && i + j < SEED_N; j++) {
-      reqs.push([
-        'POST',
-        url,
-        JSON.stringify({ url: genUrl(i + j) }),
-        params,
-      ]);
-    }
-
-    const responses = http.batch(reqs);
-
-    for (const r of responses) {
-      if (r.status !== 201) {
-        throw new Error(`Setup failed: status=${r.status} body=${r.body}`);
-      }
-      const code = r.json('code');
-      if (!code) throw new Error(`Setup missing code: status=${r.status} body=${r.body}`);
-      created.push(code);
-    }
-  }
-  // hot/cold split
-  const hotCount = Math.max(1, Math.floor(created.length * HOT_SET_PCT));
-  const hotCodes = created.slice(0, hotCount);
-  const coldCodes = created.slice(hotCount);
-
-  return { codes: created, hotCodes, coldCodes };
+  return { codes: createdCodes, hotCodes, coldCodes };
 }
 
 // --------------------
@@ -202,12 +176,17 @@ export function redirectExec(data) {
     timeout: '10s',
   });
 
-  check(res, {
+  const success = check(res, {
     'redirect -> 302': (r) => r.status === 302,
     'redirect has Location': (r) => !!r.headers.Location,
   });
 
-  // With arrival-rate executors, sleep is optional (you can keep it at 0)
+  redirectSuccessRate.add(success, { endpoint: 'redirect' });
+  redirectStatusCount.add(1, { endpoint: 'redirect', status: String(res.status) });
+  redirectDuration.add(res.timings.duration, { endpoint: 'redirect' });
+  redirectWaiting.add(res.timings.waiting, { endpoint: 'redirect' });
+  redirectConnecting.add(res.timings.connecting, { endpoint: 'redirect' });
+  redirectTlsHandshaking.add(res.timings.tls_handshaking, { endpoint: 'redirect' });
 }
 
 // --------------------
@@ -225,10 +204,17 @@ export function shortenExec() {
     timeout: '10s',
   });
 
-  check(res, {
+  const success = check(res, {
     'shorten -> 201': (r) => r.status === 201,
     'shorten has code': (r) => !!r.json('code'),
   });
+
+  shortenSuccessRate.add(success, { endpoint: 'shorten' });
+  shortenStatusCount.add(1, { endpoint: 'shorten', status: String(res.status) });
+  shortenDuration.add(res.timings.duration, { endpoint: 'shorten' });
+  shortenWaiting.add(res.timings.waiting, { endpoint: 'shorten' });
+  shortenConnecting.add(res.timings.connecting, { endpoint: 'shorten' });
+  shortenTlsHandshaking.add(res.timings.tls_handshaking, { endpoint: 'shorten' });
 }
 
 /*

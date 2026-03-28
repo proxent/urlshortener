@@ -64,6 +64,8 @@ The exporter values file enables:
 
 ## 5. Grafana access
 
+If you want a step-by-step walkthrough for logging in, importing dashboards, and building a benchmark-focused dashboard, see `k8s/monitoring/GRAFANA.md`.
+
 Retrieve the generated Grafana admin password:
 
 ```bash

@@ -27,6 +27,28 @@ const httpRequestsTotal = new Counter({
   registers: [metricsRegistry],
 });
 
+const storeOperationDuration = new Histogram({
+  name: 'store_operation_duration_seconds',
+  help: 'Duration of store operations',
+  labelNames: ['operation', 'status'] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [metricsRegistry],
+});
+
+const storeOperationTotal = new Counter({
+  name: 'store_operation_total',
+  help: 'Total number of store operations',
+  labelNames: ['operation', 'status'] as const,
+  registers: [metricsRegistry],
+});
+
+const uniqueCodeAttempts = new Histogram({
+  name: 'store_generate_unique_code_attempts',
+  help: 'Number of attempts needed to generate a unique short code',
+  buckets: [1, 2, 3, 5, 10, 20],
+  registers: [metricsRegistry],
+});
+
 const getRouteLabel = (req: Request): string => {
   if (typeof req.route?.path === 'string') {
     return `${req.baseUrl || ''}${req.route.path}` || req.route.path;
@@ -63,4 +85,28 @@ export const metricsHandler: RequestHandler = async (_req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+export const observeStoreOperation = async <T>(
+  operation: string,
+  fn: () => Promise<T>,
+): Promise<T> => {
+  const endTimer = storeOperationDuration.startTimer();
+
+  try {
+    const result = await fn();
+    const labels = { operation, status: 'success' } as const;
+    storeOperationTotal.inc(labels);
+    endTimer(labels);
+    return result;
+  } catch (error) {
+    const labels = { operation, status: 'error' } as const;
+    storeOperationTotal.inc(labels);
+    endTimer(labels);
+    throw error;
+  }
+};
+
+export const observeUniqueCodeAttempts = (attempts: number): void => {
+  uniqueCodeAttempts.observe(attempts);
 };

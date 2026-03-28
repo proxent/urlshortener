@@ -9,7 +9,7 @@ Highlights:
 - Accepts `POST /shorten` requests with strict URL validation
 - Redirects `GET /r/:code` requests and increments hit counts
 - Applies configurable rate limiting to the shorten endpoint
-- Ships with Docker Compose, k6 load-test tooling, Kubernetes manifests for generic clusters and OKE, and a monitoring bundle for Prometheus/Grafana
+- Ships with Docker Compose, k6 load-test tooling, OKE-focused Kubernetes manifests, and a monitoring bundle for Prometheus/Grafana
 
 ## Quick Start
 
@@ -276,14 +276,6 @@ Useful helpers:
   - Runs tests, builds an ARM64 image, pushes it to OCIR, and prints the image tag for manual deployment sync
 
 ## Kubernetes
-
-### `k8s/app/`
-
-Generic manifests for running the app in a cluster:
-- Namespace, ConfigMap, and example Secret
-- Deployment with non-root security context, probes, and resource requests/limits
-- Service and Ingress
-- HorizontalPodAutoscaler
 
 ### `k8s/oke/`
 

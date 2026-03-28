@@ -86,6 +86,14 @@ CAPTURE_METRICS_SNAPSHOT=${CAPTURE_METRICS_SNAPSHOT:-true}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 RUN_LABEL=${1:-${MODE}-${BASE_RPS}rps-${timestamp}}
 RESULT_DIR="${RESULTS_BASE_DIR}/${RUN_LABEL}"
+RUN_METADATA_FILE="${RESULT_DIR}/run-metadata.env"
+GIT_STATUS_FILE="${RESULT_DIR}/git-status.txt"
+K6_SUMMARY_FILE="${RESULT_DIR}/k6-summary.json"
+K6_LOG_FILE="${RESULT_DIR}/k6-output.log"
+METRICS_PRE_RESTORE_FILE="${RESULT_DIR}/metrics-pre-restore.prom"
+METRICS_PRE_RUN_FILE="${RESULT_DIR}/metrics-pre-run.prom"
+METRICS_POST_RUN_FILE="${RESULT_DIR}/metrics-post-run.prom"
+ARTIFACTS_FILE="${RESULT_DIR}/artifacts.txt"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -140,7 +148,7 @@ git_sha=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)
 git_status=$(git -C "$REPO_ROOT" status --short 2>/dev/null || true)
 
 write_metadata() {
-  cat > "${RESULT_DIR}/metadata.env" <<EOF
+  cat > "${RUN_METADATA_FILE}" <<EOF
 RUN_LABEL=${RUN_LABEL}
 STARTED_AT_UTC=${timestamp}
 TARGET=${TARGET}
@@ -169,7 +177,51 @@ GIT_SHA=${git_sha}
 EOF
 
   if [ -n "$git_status" ]; then
-    printf '%s\n' "$git_status" > "${RESULT_DIR}/git-status.txt"
+    printf '%s\n' "$git_status" > "${GIT_STATUS_FILE}"
+  fi
+
+  cat > "${ARTIFACTS_FILE}" <<EOF
+${RUN_METADATA_FILE}
+${GIT_STATUS_FILE}
+${K6_SUMMARY_FILE}
+${K6_LOG_FILE}
+${METRICS_PRE_RESTORE_FILE}
+${METRICS_PRE_RUN_FILE}
+${METRICS_POST_RUN_FILE}
+EOF
+}
+
+metrics_snapshot_path() {
+  case "$1" in
+    pre-restore) printf '%s\n' "$METRICS_PRE_RESTORE_FILE" ;;
+    pre-run) printf '%s\n' "$METRICS_PRE_RUN_FILE" ;;
+    post-run) printf '%s\n' "$METRICS_POST_RUN_FILE" ;;
+    *)
+      echo "[benchmark] unknown metrics snapshot name: $1" >&2
+      exit 1
+      ;;
+  esac
+}
+
+append_metadata() {
+  {
+    printf '%s=%s\n' "$1" "$2"
+  } >> "${RUN_METADATA_FILE}"
+}
+
+finalize_metadata() {
+  local finished_at
+  finished_at=$(date -u +%Y%m%dT%H%M%SZ)
+
+  append_metadata "FINISHED_AT_UTC" "$finished_at"
+  append_metadata "RESULT_DIR" "$RESULT_DIR"
+}
+
+run_benchmark() {
+  if command -v k6 >/dev/null 2>&1; then
+    run_k6_local
+  else
+    run_k6_docker
   fi
 }
 
@@ -222,14 +274,17 @@ capture_metrics_snapshot() {
     return 0
   fi
 
-  if ! curl -fsS --max-time 10 "$APP_METRICS_URL" > "${RESULT_DIR}/${snapshot_name}.prom"; then
+  local snapshot_path
+  snapshot_path=$(metrics_snapshot_path "$snapshot_name")
+
+  if ! curl -fsS --max-time 10 "$APP_METRICS_URL" > "${snapshot_path}"; then
     echo "[benchmark] warning: failed to capture ${snapshot_name} metrics snapshot" >&2
   fi
 }
 
 run_k6_local() {
   k6 run \
-    --summary-export "${RESULT_DIR}/summary.json" \
+    --summary-export "${K6_SUMMARY_FILE}" \
     -e "TARGET=${TARGET}" \
     -e "LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY}" \
     -e "SEED_FILE=${SEED_FILE}" \
@@ -242,7 +297,7 @@ run_k6_local() {
     -e "HOT_SET_PCT=${HOT_SET_PCT}" \
     -e "HOT_RATIO=${HOT_RATIO}" \
     "${REPO_ROOT}/scripts/loadtest.js" \
-    | tee "${RESULT_DIR}/k6.log"
+    | tee "${K6_LOG_FILE}"
 }
 
 run_k6_docker() {
@@ -262,7 +317,7 @@ run_k6_docker() {
     $container_seed_mount \
     -w /workspace \
     grafana/k6 run \
-    --summary-export "/workspace/benchmark-results/${RUN_LABEL}/summary.json" \
+    --summary-export "/workspace/benchmark-results/${RUN_LABEL}/k6-summary.json" \
     -e "TARGET=${TARGET}" \
     -e "LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY}" \
     -e "SEED_FILE=${container_seed_file}" \
@@ -275,7 +330,7 @@ run_k6_docker() {
     -e "HOT_SET_PCT=${HOT_SET_PCT}" \
     -e "HOT_RATIO=${HOT_RATIO}" \
     /workspace/scripts/loadtest.js \
-    | tee "${RESULT_DIR}/k6.log"
+    | tee "${K6_LOG_FILE}"
 }
 
 write_metadata
@@ -289,12 +344,9 @@ wait_for_ready
 capture_metrics_snapshot "pre-run"
 
 echo "[benchmark] starting load test"
-if command -v k6 >/dev/null 2>&1; then
-  run_k6_local
-else
-  run_k6_docker
-fi
+run_benchmark
 
 capture_metrics_snapshot "post-run"
+finalize_metadata
 
 echo "[benchmark] results saved to ${RESULT_DIR}"
