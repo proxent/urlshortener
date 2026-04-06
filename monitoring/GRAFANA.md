@@ -167,30 +167,32 @@ histogram_quantile(
 
 Suggested panels for PostgreSQL:
 
+The provisioned benchmark dashboard includes a `db_name` variable. Leave it on `All` if you only export one application database, or select a specific database from the dropdown when you want to isolate one.
+
 `Active connections`
 ```promql
-sum(pg_stat_activity_count{datname="urlshortener",state="active"})
+sum(pg_stat_activity_count{datname=~"$db_name",state="active"})
 ```
 
 `Transactions per second`
 ```promql
-sum(rate(pg_stat_database_xact_commit{datname="urlshortener"}[1m]))
-+ sum(rate(pg_stat_database_xact_rollback{datname="urlshortener"}[1m]))
+sum(rate(pg_stat_database_xact_commit{datname=~"$db_name"}[1m]))
++ sum(rate(pg_stat_database_xact_rollback{datname=~"$db_name"}[1m]))
 ```
 
 `Rows fetched per second`
 ```promql
-sum(rate(pg_stat_database_tup_fetched{datname="urlshortener"}[1m]))
+sum(rate(pg_stat_database_tup_fetched{datname=~"$db_name"}[1m]))
 ```
 
 `Cache hit ratio`
 ```promql
-sum(rate(pg_stat_database_blks_hit{datname="urlshortener"}[5m]))
+sum(rate(pg_stat_database_blks_hit{datname=~"$db_name"}[5m]))
 /
 (
-  sum(rate(pg_stat_database_blks_hit{datname="urlshortener"}[5m]))
+  sum(rate(pg_stat_database_blks_hit{datname=~"$db_name"}[5m]))
   +
-  sum(rate(pg_stat_database_blks_read{datname="urlshortener"}[5m]))
+  sum(rate(pg_stat_database_blks_read{datname=~"$db_name"}[5m]))
 )
 ```
 
