@@ -10,3 +10,5 @@ secrets.yaml
 
 seed_codes.json
 .test-dist/
+.codex
+benchmark-results/

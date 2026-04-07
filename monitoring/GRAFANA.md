@@ -157,21 +157,16 @@ sum(process_resident_memory_bytes{service="url-shortener"})
 
 `Event Loop Lag p95`
 ```promql
-histogram_quantile(
-  0.95,
-  sum by (le) (
-    rate(nodejs_eventloop_lag_seconds_bucket{service="url-shortener"}[5m])
-  )
-)
+nodejs_eventloop_lag_p99_seconds{service="url-shortener"}
 ```
 
 Suggested panels for PostgreSQL:
 
-The provisioned benchmark dashboard includes a `db_name` variable. Leave it on `All` if you only export one application database, or select a specific database from the dropdown when you want to isolate one.
+The provisioned benchmark dashboard includes a `db_name` variable derived from `pg_stat_database_xact_commit`. Leave it on `All` if you only export one application database, or select a specific database from the dropdown when you want to isolate one.
 
 `Active connections`
 ```promql
-sum(pg_stat_activity_count{datname=~"$db_name",state="active"})
+sum(pg_stat_database_numbackends{datname=~"$db_name"})
 ```
 
 `Transactions per second`

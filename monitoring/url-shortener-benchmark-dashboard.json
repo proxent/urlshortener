@@ -473,8 +473,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(nodejs_eventloop_lag_seconds_bucket{service=\"url-shortener\"}[5m])))",
-          "legendFormat": "event loop lag p95",
+          "expr": "nodejs_eventloop_lag_p99_seconds{service=\"url-shortener\"}",
+          "legendFormat": "event loop lag p99",
           "range": true,
           "refId": "A"
         }
@@ -527,8 +527,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(pg_stat_activity_count{datname=~\"$db_name\",state=\"active\"})",
-          "legendFormat": "active connections",
+          "expr": "sum(pg_stat_database_numbackends{datname=~\"$db_name\"})",
+          "legendFormat": "backend connections",
           "range": true,
           "refId": "A"
         }
@@ -664,7 +664,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(pg_stat_activity_count, datname)",
+        "definition": "label_values(pg_stat_database_xact_commit, datname)",
         "includeAll": true,
         "label": "Database",
         "multi": false,
@@ -672,7 +672,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(pg_stat_activity_count, datname)",
+          "query": "label_values(pg_stat_database_xact_commit, datname)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
