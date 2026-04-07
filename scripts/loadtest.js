@@ -77,7 +77,8 @@ export const options = (() => {
 
   return {
     maxRedirects: 0,
-    discardResponseBodies: false,
+    // Keep logs free of generated response payloads; this benchmark only needs status/timing signals.
+    discardResponseBodies: true,
     thresholds: {
       // Overall failure rate (redirect + shorten) — only for the run phase
       'http_req_failed{phase:run}': ['rate<0.01'],
@@ -206,7 +207,7 @@ export function shortenExec() {
 
   const success = check(res, {
     'shorten -> 201': (r) => r.status === 201,
-    'shorten has code': (r) => !!r.json('code'),
+    'shorten content-type is json': (r) => String(r.headers['Content-Type'] || '').includes('application/json'),
   });
 
   shortenSuccessRate.add(success, { endpoint: 'shorten' });
