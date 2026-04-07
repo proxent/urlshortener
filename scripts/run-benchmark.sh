@@ -133,7 +133,7 @@ quote() {
 require_command ssh
 require_command curl
 require_command git
-require_command node
+require_command jq
 
 if ! command -v k6 >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
   echo "[benchmark] either k6 or docker must be installed on the jump VM" >&2
@@ -168,7 +168,7 @@ if [ ! -f "$SEED_FILE" ]; then
 fi
 
 set_step "loading seed file"
-seed_code_count=$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!Array.isArray(data) || data.length===0){throw new Error('seed file must be a non-empty JSON array')} console.log(data.length)" "$SEED_FILE")
+seed_code_count=$(jq -er 'if type == "array" and length > 0 then length else error("seed file must be a non-empty JSON array") end' "$SEED_FILE")
 
 if [ -z "$EXPECTED_URL_COUNT" ]; then
   EXPECTED_URL_COUNT=$seed_code_count
@@ -315,7 +315,7 @@ validate_seed_codes() {
   local sample_count=$SEED_SMOKE_SAMPLE_SIZE
   local sample_codes
 
-  sample_codes=$(node -e "const fs=require('fs'); const limit=Math.max(1, Number(process.argv[2] || 5)); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(!Array.isArray(data) || data.length===0){throw new Error('seed file must be a non-empty JSON array')} console.log(data.slice(0, limit).join('\n'))" "$SEED_FILE" "$sample_count")
+  sample_codes=$(jq -er --argjson limit "$sample_count" 'if type == "array" and length > 0 then .[:$limit][] else error("seed file must be a non-empty JSON array") end' "$SEED_FILE")
 
   echo "[benchmark] validating ${sample_count} seed codes against ${TARGET}"
 
