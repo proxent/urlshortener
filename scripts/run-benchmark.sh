@@ -463,11 +463,22 @@ set_step "capturing pre-run metrics snapshot"
 capture_metrics_snapshot "pre-run"
 
 set_step "starting load test"
+set +e
 run_benchmark
+benchmark_exit_code=$?
+set -e
+
+append_metadata "K6_EXIT_CODE" "$benchmark_exit_code"
 
 set_step "capturing post-run metrics snapshot"
 capture_metrics_snapshot "post-run"
 set_step "finalizing benchmark metadata"
 finalize_metadata
+
+if [ "$benchmark_exit_code" -ne 0 ]; then
+  echo "[benchmark] load test finished with a non-zero exit code: ${benchmark_exit_code}" >&2
+  echo "[benchmark] thresholds may have failed; artifacts were still captured in ${RESULT_DIR}" >&2
+  exit "$benchmark_exit_code"
+fi
 
 echo "[benchmark] results saved to ${RESULT_DIR}"

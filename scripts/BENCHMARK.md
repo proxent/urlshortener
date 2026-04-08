@@ -139,6 +139,13 @@ Important files:
 - `metrics-post-run.prom`: app metrics after the load test
 - `artifacts.txt`: list of generated files
 
+If `k6` exits non-zero because thresholds fail, the script still captures:
+
+- `k6-summary.json`
+- `k6-output.log`
+- `metrics-post-run.prom`
+- `K6_EXIT_CODE` in `run-metadata.env`
+
 ## Failure Modes
 
 If the script fails before `k6` starts, check these first:
@@ -174,3 +181,24 @@ If `k6` starts but results look wrong, check:
 - Keep `seed_codes.json` on the Jump VM and update it together with the dump.
 - Do not change the app image, replica count, or benchmark parameters mid-series if you want comparable numbers.
 - For published results, record the app git SHA, target RPS, p95, p99, error rate, and the main bottleneck you observed.
+
+## Recommended Breakpoint Runs
+
+When the realistic profile is failing hard, find the breakpoint with steady runs first.
+
+```bash
+DB_VM_HOST='<db-vm-ip>' \
+DB_VM_SSH_KEY="$HOME/.ssh/<db-vm-key>" \
+DB_PGPASSWORD='<db-password>' \
+DB_NAME='<db-name>' \
+REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump' \
+TARGET='https://<app-host>' \
+SEED_FILE="$PWD/scripts/seed_codes.json" \
+LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
+SPIKE_MULT=1 \
+BASE_RPS=100 \
+MODE=realistic \
+./scripts/run-benchmark.sh steady-100rps
+```
+
+Repeat at `BASE_RPS=150`, then `200`, and compare `K6_EXIT_CODE`, `http_req_failed`, `redirect_success_rate`, `shorten_success_rate`, and `metrics-post-run.prom`.
