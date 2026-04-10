@@ -79,7 +79,9 @@ export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router 
         return res.status(404).json({ error: 'No URL was found for the provided code.' });
       }
 
-      await store.incrementHit(code);
+      void store.incrementHit(code).catch((err) => {
+        console.error('[GET /r/:code] incrementHit error:', err);
+      });
 
       return res.redirect(302, link.originalUrl);
     } catch (err) {

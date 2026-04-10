@@ -214,6 +214,53 @@ test('GET /r/:code redirects and increments hit count', async () => {
   assert.equal(updated.hitCount, 1);
 });
 
+test('GET /r/:code does not wait for incrementHit before redirecting', async () => {
+  let resolveIncrement!: () => void;
+  const releaseIncrement = new Promise<void>((resolve) => {
+    resolveIncrement = resolve;
+  });
+  let incrementStarted = false;
+
+  const store: ShortenerStoreLike = {
+    async create() {
+      throw new Error('not implemented');
+    },
+    async findByCode(code: string) {
+      return {
+        id: 1,
+        originalUrl: 'https://example.com/redirect-target',
+        code,
+        createdAt: new Date(),
+        hitCount: 0,
+      };
+    },
+    async incrementHit() {
+      incrementStarted = true;
+      await releaseIncrement;
+    },
+    async getAll() {
+      return [];
+    },
+  };
+
+  const router = createRouter({ store, shortenRateLimiter: noOpRateLimiter });
+  const res = createMockRes();
+
+  await invokeRoute({
+    router,
+    method: 'get',
+    path: '/r/:code',
+    req: { params: { code: 'code1' } },
+    res,
+  });
+
+  assert.equal(res.redirectCode, 302);
+  assert.equal(res.redirectUrl, 'https://example.com/redirect-target');
+  assert.equal(incrementStarted, true);
+
+  resolveIncrement();
+});
+
 test('GET /r/:code returns 404 for unknown code', async () => {
   const store = new InMemoryStore();
   const router = createRouter({ store, shortenRateLimiter: noOpRateLimiter });
