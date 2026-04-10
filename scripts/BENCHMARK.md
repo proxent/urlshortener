@@ -133,6 +133,7 @@ Important files:
 - `run-metadata.env`: run parameters and derived values
 - `git-status.txt`: local uncommitted changes at run time, if any
 - `k6-summary.json`: machine-readable summary
+  - does not include `setup_data`, so seed codes are not stored in the summary artifact
 - `k6-output.log`: raw `k6` console output
 - `metrics-pre-restore.prom`: app metrics before DB restore
 - `metrics-pre-run.prom`: app metrics after readiness and smoke checks

@@ -45,6 +45,15 @@ if (MODE === 'warm') HOT_RATIO = 0.9;
 const PRE_VUS = parseInt(__ENV.PRE_VUS || '200', 10);
 const MAX_VUS = parseInt(__ENV.MAX_VUS || '2000', 10);
 
+if (!FILE_CODES || FILE_CODES.length === 0) {
+  throw new Error(`Seed file is empty or unreadable: ${SEED_FILE}`);
+}
+
+const CODES = Array.from(FILE_CODES);
+const HOT_CODE_COUNT = Math.max(1, Math.floor(CODES.length * HOT_SET_PCT));
+const HOT_CODES = CODES.slice(0, HOT_CODE_COUNT);
+const COLD_CODES = CODES.slice(HOT_CODE_COUNT);
+
 const redirectSuccessRate = new Rate('redirect_success_rate');
 const shortenSuccessRate = new Rate('shorten_success_rate');
 const redirectStatusCount = new Counter('redirect_status_total');
@@ -144,31 +153,10 @@ function withBypassHeader(headers = {}) {
 }
 
 // --------------------
-// Setup: load fixed seed codes
-// --------------------
-export function setup() {
-  if (!FILE_CODES || FILE_CODES.length === 0) {
-    throw new Error(`Seed file is empty or unreadable: ${SEED_FILE}`);
-  }
-
-  const createdCodes = Array.from(FILE_CODES);
-
-  const hotCount = Math.max(1, Math.floor(createdCodes.length * HOT_SET_PCT));
-  const hotCodes = createdCodes.slice(0, hotCount);
-  const coldCodes = createdCodes.slice(hotCount);
-
-  return { codes: createdCodes, hotCodes, coldCodes };
-}
-
-// --------------------
 // Redirect scenario
 // --------------------
-export function redirectExec(data) {
-  const codes = data.codes;
-  const hotCodes = data.hotCodes;
-  const coldCodes = data.coldCodes;
-
-  const code = pickCodeSkewed(codes, hotCodes, coldCodes);
+export function redirectExec() {
+  const code = pickCodeSkewed(CODES, HOT_CODES, COLD_CODES);
   const url = `${TARGET}/r/${code}`;
 
   const res = http.get(url, {
