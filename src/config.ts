@@ -39,6 +39,7 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
 
 const RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.RATE_LIMIT_WINDOW_MS, 60_000);
 const RATE_LIMIT_MAX_SHORTEN = parsePositiveInt(process.env.RATE_LIMIT_MAX_SHORTEN, 60);
+const REDIRECT_CACHE_MAX_ENTRIES = parsePositiveInt(process.env.REDIRECT_CACHE_MAX_ENTRIES, 50_000);
 const LOADTEST_BYPASS_KEY = process.env.LOADTEST_BYPASS_KEY || '';
 
 const parseTrustProxy = (value: string | undefined): TrustProxy | undefined => {
@@ -75,6 +76,7 @@ export const config = {
   DATABASE_URL,
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_MAX_SHORTEN,
+  REDIRECT_CACHE_MAX_ENTRIES,
   LOADTEST_BYPASS_KEY,
   TRUST_PROXY,
 };
