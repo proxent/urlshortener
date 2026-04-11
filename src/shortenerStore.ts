@@ -60,13 +60,13 @@ export class PrismaShortenerStore {
   }
 
   private isUniqueCodeConflict(error: unknown): boolean {
+    const errorWithCode =
+      typeof error === 'object' && error !== null ? (error as { code?: unknown }) : null;
+
     return (
       (error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002') ||
-      (typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        error.code === 'P2002')
+      errorWithCode?.code === 'P2002'
     );
   }
 
