@@ -17,6 +17,7 @@ export interface AppDeps {
 
 export const createApp = ({ store }: AppDeps) => {
   const app = express();
+  const publicDir = path.join(__dirname, '../public');
 
   if (config.TRUST_PROXY !== undefined) {
     app.set('trust proxy', config.TRUST_PROXY);
@@ -39,7 +40,14 @@ export const createApp = ({ store }: AppDeps) => {
     }
   });
 
-  app.use(express.static(path.join(__dirname, '../public')));
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+
+  app.get('/app.js', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'app.js'));
+  });
+
   app.use(express.json());
   app.use(prometheusMiddleware);
 
