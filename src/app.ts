@@ -48,7 +48,7 @@ export const createApp = ({ store }: AppDeps) => {
     res.sendFile(path.join(publicDir, 'app.js'));
   });
 
-  app.use(express.json());
+  app.use('/shorten', express.json());
   app.use(prometheusMiddleware);
 
   app.use('/', createRouter({ store, shortenRateLimiter }));
