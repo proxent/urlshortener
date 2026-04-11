@@ -9,8 +9,14 @@ export interface ShortLink {
   hitCount: number;
 }
 
+export interface RedirectTarget {
+  code: string;
+  originalUrl: string;
+}
+
 export interface ShortenerStoreLike {
   create(originalUrl: string): Promise<ShortLink>;
+  findRedirectTargetByCode(code: string): Promise<RedirectTarget | null>;
   findByCode(code: string): Promise<ShortLink | null>;
   incrementHit(code: string): Promise<void>;
   getAll(): Promise<ShortLink[]>;
@@ -74,8 +80,8 @@ export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router 
     const { code } = req.params;
 
     try {
-      const link = await store.findByCode(code);
-      if (!link) {
+      const redirectTarget = await store.findRedirectTargetByCode(code);
+      if (!redirectTarget) {
         return res.status(404).json({ error: 'No URL was found for the provided code.' });
       }
 
@@ -83,7 +89,7 @@ export const createRouter = ({ store, shortenRateLimiter }: RouterDeps): Router 
         console.error('[GET /r/:code] incrementHit error:', err);
       });
 
-      return res.redirect(302, link.originalUrl);
+      return res.redirect(302, redirectTarget.originalUrl);
     } catch (err) {
       console.error('[GET /r/:code] error:', err);
       return res.status(500).json({ error: 'An internal server error occurred.' });

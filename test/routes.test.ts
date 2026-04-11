@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Router, RequestHandler } from 'express';
-import { createRouter, type ShortLink, type ShortenerStoreLike } from '../src/routes';
+import { createRouter, type RedirectTarget, type ShortLink, type ShortenerStoreLike } from '../src/routes';
 
 class InMemoryStore implements ShortenerStoreLike {
   private links: ShortLink[] = [];
@@ -22,6 +22,18 @@ class InMemoryStore implements ShortenerStoreLike {
 
   async findByCode(code: string): Promise<ShortLink | null> {
     return this.links.find((link) => link.code === code) ?? null;
+  }
+
+  async findRedirectTargetByCode(code: string): Promise<RedirectTarget | null> {
+    const link = await this.findByCode(code);
+    if (!link) {
+      return null;
+    }
+
+    return {
+      code: link.code,
+      originalUrl: link.originalUrl,
+    };
   }
 
   async incrementHit(code: string): Promise<void> {
@@ -224,6 +236,12 @@ test('GET /r/:code does not wait for incrementHit before redirecting', async () 
   const store: ShortenerStoreLike = {
     async create() {
       throw new Error('not implemented');
+    },
+    async findRedirectTargetByCode(code: string) {
+      return {
+        code,
+        originalUrl: 'https://example.com/redirect-target',
+      };
     },
     async findByCode(code: string) {
       return {

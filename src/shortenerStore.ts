@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { observeStoreOperation, observeUniqueCodeAttempts } from './metrics';
 import { prisma } from './prisma';
+import type { RedirectTarget } from './routes';
 
 export interface ShortLink {
   id: number;
@@ -102,6 +103,18 @@ export class PrismaShortenerStore {
     return observeStoreOperation('findByCode', () =>
       this.client.url.findUnique({
         where: { code },
+      }),
+    );
+  }
+
+  async findRedirectTargetByCode(code: string): Promise<RedirectTarget | null> {
+    return observeStoreOperation('findRedirectTargetByCode', () =>
+      this.client.url.findUnique({
+        where: { code },
+        select: {
+          code: true,
+          originalUrl: true,
+        },
       }),
     );
   }

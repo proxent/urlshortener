@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CachedShortenerStore } from '../src/cachedShortenerStore';
 import type { AppStoreLike } from '../src/app';
-import type { ShortLink } from '../src/routes';
+import type { RedirectTarget, ShortLink } from '../src/routes';
 
 const buildLink = (code: string, originalUrl = `https://example.com/${code}`): ShortLink => ({
   id: Number(code.replace(/\D/g, '')) || 1,
@@ -30,6 +30,19 @@ class CountingStore implements AppStoreLike {
     return this.links.get(code) ?? null;
   }
 
+  async findRedirectTargetByCode(code: string): Promise<RedirectTarget | null> {
+    this.findCalls += 1;
+    const link = this.links.get(code);
+    if (!link) {
+      return null;
+    }
+
+    return {
+      code: link.code,
+      originalUrl: link.originalUrl,
+    };
+  }
+
   async incrementHit(code: string): Promise<void> {
     const link = this.links.get(code);
     if (link) {
@@ -42,12 +55,12 @@ class CountingStore implements AppStoreLike {
   }
 }
 
-test('findByCode returns cached links without hitting the backing store twice', async () => {
+test('findRedirectTargetByCode returns cached targets without hitting the backing store twice', async () => {
   const backingStore = new CountingStore(new Map([['code1', buildLink('code1')]]));
   const store = new CachedShortenerStore(backingStore, 100);
 
-  const first = await store.findByCode('code1');
-  const second = await store.findByCode('code1');
+  const first = await store.findRedirectTargetByCode('code1');
+  const second = await store.findRedirectTargetByCode('code1');
 
   assert.ok(first);
   assert.ok(second);
@@ -60,7 +73,7 @@ test('create warms the redirect cache for the new short code', async () => {
   const store = new CachedShortenerStore(backingStore, 100);
 
   const created = await store.create('https://example.com/docs');
-  const fetched = await store.findByCode(created.code);
+  const fetched = await store.findRedirectTargetByCode(created.code);
 
   assert.ok(fetched);
   assert.equal(fetched.code, created.code);
@@ -77,11 +90,11 @@ test('cache evicts the oldest entry when max entries is exceeded', async () => {
   );
   const store = new CachedShortenerStore(backingStore, 2);
 
-  await store.findByCode('code1');
-  await store.findByCode('code2');
-  await store.findByCode('code3');
-  await store.findByCode('code2');
-  await store.findByCode('code1');
+  await store.findRedirectTargetByCode('code1');
+  await store.findRedirectTargetByCode('code2');
+  await store.findRedirectTargetByCode('code3');
+  await store.findRedirectTargetByCode('code2');
+  await store.findRedirectTargetByCode('code1');
 
   assert.equal(backingStore.findCalls, 4);
 });

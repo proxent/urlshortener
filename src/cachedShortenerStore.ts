@@ -1,8 +1,8 @@
 import type { AppStoreLike } from './app';
-import type { ShortLink } from './routes';
+import type { RedirectTarget, ShortLink } from './routes';
 
 export class CachedShortenerStore implements AppStoreLike {
-  private readonly redirectCache = new Map<string, ShortLink>();
+  private readonly redirectCache = new Map<string, RedirectTarget>();
 
   constructor(
     private readonly store: AppStoreLike,
@@ -15,11 +15,11 @@ export class CachedShortenerStore implements AppStoreLike {
 
   async create(originalUrl: string): Promise<ShortLink> {
     const link = await this.store.create(originalUrl);
-    this.cacheLink(link);
+    this.cacheRedirectTarget(link);
     return link;
   }
 
-  async findByCode(code: string): Promise<ShortLink | null> {
+  async findRedirectTargetByCode(code: string): Promise<RedirectTarget | null> {
     const cached = this.redirectCache.get(code);
     if (cached) {
       this.redirectCache.delete(code);
@@ -27,20 +27,24 @@ export class CachedShortenerStore implements AppStoreLike {
       return cached;
     }
 
+    const redirectTarget = await this.store.findRedirectTargetByCode(code);
+    if (redirectTarget) {
+      this.cacheRedirectTarget(redirectTarget);
+    }
+
+    return redirectTarget;
+  }
+
+  async findByCode(code: string): Promise<ShortLink | null> {
     const link = await this.store.findByCode(code);
     if (link) {
-      this.cacheLink(link);
+      this.cacheRedirectTarget(link);
     }
 
     return link;
   }
 
   async incrementHit(code: string): Promise<void> {
-    const cached = this.redirectCache.get(code);
-    if (cached) {
-      cached.hitCount += 1;
-    }
-
     await this.store.incrementHit(code);
   }
 
@@ -48,9 +52,12 @@ export class CachedShortenerStore implements AppStoreLike {
     return this.store.getAll();
   }
 
-  private cacheLink(link: ShortLink): void {
-    this.redirectCache.delete(link.code);
-    this.redirectCache.set(link.code, { ...link });
+  private cacheRedirectTarget(target: RedirectTarget): void {
+    this.redirectCache.delete(target.code);
+    this.redirectCache.set(target.code, {
+      code: target.code,
+      originalUrl: target.originalUrl,
+    });
 
     if (this.redirectCache.size <= this.maxEntries) {
       return;

@@ -45,6 +45,40 @@ test('create retries when generated code collides on unique constraint', async (
   assert.deepEqual(createdCodes, ['firsttry', 'secondtry']);
 });
 
+test('findRedirectTargetByCode selects only redirect fields', async () => {
+  const fakePrisma = {
+    $queryRaw: async () => 1,
+    $transaction: async <T>(operations: Promise<T>[]) => Promise.all(operations),
+    url: {
+      create: async () => {
+        throw new Error('not implemented');
+      },
+      findUnique: async ({ where, select }: { where: { code: string }; select?: Record<string, boolean> }) => {
+        assert.deepEqual(where, { code: 'code1' });
+        assert.deepEqual(select, {
+          code: true,
+          originalUrl: true,
+        });
+
+        return {
+          code: 'code1',
+          originalUrl: 'https://example.com/code1',
+        };
+      },
+      update: async () => undefined,
+      findMany: async () => [],
+    },
+  } as unknown as typeof prisma;
+
+  const store = new PrismaShortenerStore(fakePrisma, () => 'unused');
+  const redirectTarget = await store.findRedirectTargetByCode('code1');
+
+  assert.deepEqual(redirectTarget, {
+    code: 'code1',
+    originalUrl: 'https://example.com/code1',
+  });
+});
+
 test('incrementHit batches repeated updates for the same short code', async () => {
   const updates: Array<{ code: string; incrementBy: number }> = [];
   let transactionCalls = 0;

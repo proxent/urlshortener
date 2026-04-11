@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, type AppStoreLike } from '../src/app';
-import type { ShortLink } from '../src/routes';
+import type { RedirectTarget, ShortLink } from '../src/routes';
 
 class TestStore implements AppStoreLike {
   constructor(private readonly isReady: boolean) {}
@@ -13,6 +13,10 @@ class TestStore implements AppStoreLike {
   }
 
   async create(_originalUrl: string): Promise<ShortLink> {
+    throw new Error('Not implemented');
+  }
+
+  async findRedirectTargetByCode(_code: string): Promise<RedirectTarget | null> {
     throw new Error('Not implemented');
   }
 
