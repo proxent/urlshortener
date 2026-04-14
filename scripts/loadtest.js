@@ -163,7 +163,7 @@ export function redirectExec() {
   const url = `${TARGET}/r/${code}`;
 
   const res = http.get(url, {
-    tags: { phase: 'run', endpoint: 'redirect' },
+    tags: { phase: 'run', endpoint: 'redirect', name: 'GET /r/:code' },
     redirects: 0,   // Measure only the 302 response
     timeout: '10s',
   });
@@ -191,7 +191,7 @@ export function shortenExec() {
 
   const res = http.post(url, payload, {
     headers: withBypassHeader({ 'Content-Type': 'application/json' }),
-    tags: { phase: 'run', endpoint: 'shorten' },
+    tags: { phase: 'run', endpoint: 'shorten', name: 'POST /shorten' },
     redirects: 0,
     timeout: '10s',
   });
