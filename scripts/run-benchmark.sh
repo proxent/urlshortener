@@ -44,8 +44,8 @@ Optional environment:
   DB_NAME           PostgreSQL database name (default: urlshortener)
   RESET_SCHEMA      Reset public schema before restore (default: true)
   SKIP_RESTORE      Skip the remote restore step (default: false)
-  SEED_FILE         Local seed file for k6 (default: scripts/seed_codes.json)
-  EXPECTED_URL_COUNT  Expected "Url" row count after restore (default: seed file length)
+  SEED_FILE         Optional local seed file override for k6
+  EXPECTED_URL_COUNT  Expected "Url" row count after restore/export (default: exported seed count)
   SKIP_ROW_COUNT_CHECK  Skip restored row count validation (default: false)
   SEED_SMOKE_SAMPLE_SIZE  Number of seed codes to validate before k6 (default: 5)
   LOADTEST_BYPASS_KEY  Bypass key for /shorten (default: bypass)
@@ -87,7 +87,7 @@ DB_PGPASSWORD=${DB_PGPASSWORD:-}
 RESET_SCHEMA=${RESET_SCHEMA:-true}
 SKIP_RESTORE=${SKIP_RESTORE:-false}
 
-SEED_FILE=${SEED_FILE:-${REPO_ROOT}/scripts/seed_codes.json}
+SEED_FILE=${SEED_FILE:-}
 EXPECTED_URL_COUNT=${EXPECTED_URL_COUNT:-}
 SKIP_ROW_COUNT_CHECK=${SKIP_ROW_COUNT_CHECK:-false}
 SEED_SMOKE_SAMPLE_SIZE=${SEED_SMOKE_SAMPLE_SIZE:-5}
@@ -114,6 +114,7 @@ RUN_METADATA_FILE="${RESULT_DIR}/run-metadata.env"
 GIT_STATUS_FILE="${RESULT_DIR}/git-status.txt"
 K6_SUMMARY_FILE="${RESULT_DIR}/k6-summary.json"
 K6_LOG_FILE="${RESULT_DIR}/k6-output.log"
+GENERATED_SEED_FILE="${RESULT_DIR}/seed_codes.generated.json"
 METRICS_PRE_RESTORE_FILE="${RESULT_DIR}/metrics-pre-restore.prom"
 METRICS_PRE_RUN_FILE="${RESULT_DIR}/metrics-pre-run.prom"
 METRICS_POST_RUN_FILE="${RESULT_DIR}/metrics-post-run.prom"
@@ -162,19 +163,26 @@ if [ "$SKIP_RESTORE" != "true" ]; then
   fi
 fi
 
-if [ ! -f "$SEED_FILE" ]; then
-  echo "[benchmark] seed file not found: $SEED_FILE" >&2
-  exit 1
-fi
+if [ -z "$SEED_FILE" ]; then
+  if [ -z "$DB_VM_HOST" ]; then
+    echo "[benchmark] DB_VM_HOST is required when SEED_FILE is not provided" >&2
+    exit 1
+  fi
 
-set_step "loading seed file"
-seed_code_count=$(jq -er 'if type == "array" and length > 0 then length else error("seed file must be a non-empty JSON array") end' "$SEED_FILE")
+  if [ -z "$DB_VM_SSH_KEY" ]; then
+    echo "[benchmark] DB_VM_SSH_KEY is required when SEED_FILE is not provided" >&2
+    exit 1
+  fi
 
-if [ -z "$EXPECTED_URL_COUNT" ]; then
-  EXPECTED_URL_COUNT=$seed_code_count
+  if [ -z "$DB_PGPASSWORD" ]; then
+    echo "[benchmark] DB_PGPASSWORD is required when SEED_FILE is not provided" >&2
+    exit 1
+  fi
 fi
 
 mkdir -p "$RESULT_DIR"
+
+seed_code_count=
 
 git_sha=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)
 git_status=$(git -C "$REPO_ROOT" status --short 2>/dev/null || true)
@@ -195,7 +203,7 @@ DB_USER=${DB_USER}
 DB_NAME=${DB_NAME}
 RESET_SCHEMA=${RESET_SCHEMA}
 SKIP_RESTORE=${SKIP_RESTORE}
-SEED_FILE=${SEED_FILE}
+SEED_FILE_OVERRIDE=${SEED_FILE}
 LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY}
 MODE=${MODE}
 BASE_RPS=${BASE_RPS}
@@ -206,7 +214,6 @@ MAX_VUS=${MAX_VUS}
 HOT_SET_PCT=${HOT_SET_PCT}
 HOT_RATIO=${HOT_RATIO}
 EXPECTED_URL_COUNT=${EXPECTED_URL_COUNT}
-SEED_CODE_COUNT=${seed_code_count}
 SKIP_ROW_COUNT_CHECK=${SKIP_ROW_COUNT_CHECK}
 SEED_SMOKE_SAMPLE_SIZE=${SEED_SMOKE_SAMPLE_SIZE}
 GIT_SHA=${git_sha}
@@ -221,6 +228,7 @@ ${RUN_METADATA_FILE}
 ${GIT_STATUS_FILE}
 ${K6_SUMMARY_FILE}
 ${K6_LOG_FILE}
+${GENERATED_SEED_FILE}
 ${METRICS_PRE_RESTORE_FILE}
 ${METRICS_PRE_RUN_FILE}
 ${METRICS_POST_RUN_FILE}
@@ -309,6 +317,57 @@ validate_row_count() {
   fi
 
   echo "[benchmark] restored row count verified: ${actual_url_count}"
+}
+
+generate_seed_file() {
+  local target_seed_file
+  target_seed_file=${SEED_FILE:-$GENERATED_SEED_FILE}
+
+  if [ -n "$SEED_FILE" ]; then
+    if [ ! -f "$SEED_FILE" ]; then
+      echo "[benchmark] seed file not found: $SEED_FILE" >&2
+      exit 1
+    fi
+  else
+    echo "[benchmark] exporting seed codes from ${DB_VM_USER}@${DB_VM_HOST}:${DB_NAME}"
+
+    local remote_cmd
+    remote_cmd=$(
+      cat <<EOF
+PGPASSWORD=$(quote "$DB_PGPASSWORD") \
+psql -v ON_ERROR_STOP=1 -qtAX \
+  -h $(quote "$DB_HOST") \
+  -p $(quote "$DB_PORT") \
+  -U $(quote "$DB_USER") \
+  -d $(quote "$DB_NAME") \
+  -c 'SELECT code FROM "Url" ORDER BY id;'
+EOF
+    )
+
+    ssh \
+      -i "$DB_VM_SSH_KEY" \
+      -o StrictHostKeyChecking=no \
+      "${DB_VM_USER}@${DB_VM_HOST}" \
+      "$remote_cmd" \
+      | jq -Rsc 'split("\n") | map(select(length > 0))' > "$target_seed_file"
+  fi
+
+  seed_code_count=$(jq -er 'if type == "array" and length > 0 then length else error("seed file must be a non-empty JSON array") end' "$target_seed_file")
+
+  if [ -z "$EXPECTED_URL_COUNT" ]; then
+    EXPECTED_URL_COUNT=$seed_code_count
+  fi
+
+  SEED_FILE=$target_seed_file
+  append_metadata "EXPECTED_URL_COUNT" "$EXPECTED_URL_COUNT"
+  append_metadata "SEED_FILE" "$SEED_FILE"
+  append_metadata "SEED_CODE_COUNT" "$seed_code_count"
+
+  if [ "$SEED_FILE" = "$GENERATED_SEED_FILE" ]; then
+    append_metadata "GENERATED_SEED_FILE" "$GENERATED_SEED_FILE"
+  fi
+
+  echo "[benchmark] seed file ready: ${SEED_FILE} (${seed_code_count} codes)"
 }
 
 validate_seed_codes() {
@@ -455,6 +514,8 @@ fi
 
 set_step "validating restored row count"
 validate_row_count
+set_step "preparing seed file"
+generate_seed_file
 set_step "waiting for app readiness"
 wait_for_ready
 set_step "validating seed codes against app"

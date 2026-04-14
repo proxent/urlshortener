@@ -49,10 +49,9 @@ if (!FILE_CODES || FILE_CODES.length === 0) {
   throw new Error(`Seed file is empty or unreadable: ${SEED_FILE}`);
 }
 
-const CODES = Array.from(FILE_CODES);
-const HOT_CODE_COUNT = Math.max(1, Math.floor(CODES.length * HOT_SET_PCT));
-const HOT_CODES = CODES.slice(0, HOT_CODE_COUNT);
-const COLD_CODES = CODES.slice(HOT_CODE_COUNT);
+const CODES = FILE_CODES;
+const CODE_COUNT = CODES.length;
+const HOT_CODE_COUNT = Math.max(1, Math.floor(CODE_COUNT * HOT_SET_PCT));
 
 const redirectSuccessRate = new Rate('redirect_success_rate');
 const shortenSuccessRate = new Rate('shorten_success_rate');
@@ -138,13 +137,17 @@ function randInt(maxExclusive) {
   return Math.floor(Math.random() * maxExclusive);
 }
 
-function pickCodeSkewed(codes, hotCodes, coldCodes) {
-  if (hotCodes.length === 0) return codes[randInt(codes.length)];
-  if (coldCodes.length === 0) return hotCodes[randInt(hotCodes.length)];
+function pickCodeSkewed(codes, hotCodeCount) {
+  if (hotCodeCount <= 0 || hotCodeCount >= codes.length) {
+    return codes[randInt(codes.length)];
+  }
 
   // Pick from the hot set with probability HOT_RATIO
-  if (Math.random() < HOT_RATIO) return hotCodes[randInt(hotCodes.length)];
-  return coldCodes[randInt(coldCodes.length)];
+  if (Math.random() < HOT_RATIO) {
+    return codes[randInt(hotCodeCount)];
+  }
+
+  return codes[hotCodeCount + randInt(codes.length - hotCodeCount)];
 }
 
 function withBypassHeader(headers = {}) {
@@ -156,7 +159,7 @@ function withBypassHeader(headers = {}) {
 // Redirect scenario
 // --------------------
 export function redirectExec() {
-  const code = pickCodeSkewed(CODES, HOT_CODES, COLD_CODES);
+  const code = pickCodeSkewed(CODES, HOT_CODE_COUNT);
   const url = `${TARGET}/r/${code}`;
 
   const res = http.get(url, {

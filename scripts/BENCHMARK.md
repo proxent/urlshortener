@@ -7,19 +7,20 @@ It is designed to keep the benchmark start state stable:
 1. capture a pre-restore metrics snapshot
 2. restore the baseline dump on the DB VM
 3. verify the restored `"Url"` row count
-4. wait for the app readiness endpoint
-5. smoke-check a few seed codes against `/r/:code`
-6. capture a pre-run metrics snapshot
-7. run `k6`
-8. capture a post-run metrics snapshot
-9. save metadata and artifacts under `benchmark-results/`
+4. export seed codes from the restored DB
+5. wait for the app readiness endpoint
+6. smoke-check a few seed codes against `/r/:code`
+7. capture a pre-run metrics snapshot
+8. run `k6`
+9. capture a post-run metrics snapshot
+10. save metadata and artifacts under `benchmark-results/`
 
 ## What This Script Guarantees
 
 - `k6` does not generate seed data at runtime
 - the DB is restored before each benchmark run unless `SKIP_RESTORE=true`
 - the restored dataset is checked against the expected row count
-- the seed file is smoke-tested before the load test starts
+- the seed file is exported from the restored DB by default and smoke-tested before the load test starts
 - benchmark outputs are saved with enough metadata to compare runs later
 
 What it does not do yet:
@@ -30,7 +31,7 @@ What it does not do yet:
 
 ## Required Environment
 
-These are required unless `SKIP_RESTORE=true`.
+These are required unless `SKIP_RESTORE=true` and `SEED_FILE` is provided.
 
 - `DB_VM_HOST`: SSH host for the DB VM
 - `DB_VM_SSH_KEY`: SSH private key path for the DB VM
@@ -44,8 +45,8 @@ These are required unless `SKIP_RESTORE=true`.
 - `DB_PORT`: PostgreSQL port. Default: `5432`
 - `DB_USER`: PostgreSQL user. Default: `postgres`
 - `DB_NAME`: PostgreSQL database name. Default: `urlshortener`
-- `SEED_FILE`: local seed file on the Jump VM. Default: `scripts/seed_codes.json`
-- `EXPECTED_URL_COUNT`: expected `"Url"` row count after restore. Default: seed file length
+- `SEED_FILE`: optional local seed file override on the Jump VM
+- `EXPECTED_URL_COUNT`: expected `"Url"` row count after restore. Default: exported seed count
 - `SKIP_ROW_COUNT_CHECK`: set to `true` to skip row count validation
 - `SEED_SMOKE_SAMPLE_SIZE`: number of seed codes to validate before `k6`. Default: `5`
 - `TARGET`: app base URL. Default: `https://141-148-185-116.nip.io`
@@ -73,7 +74,6 @@ Keep these values local to the Jump VM or your shell session:
 - `REMOTE_DUMP_PATH`
 - `TARGET`
 - `LOADTEST_BYPASS_KEY`
-- `SEED_FILE`
 
 ## Example: Baseline Run
 
@@ -84,7 +84,6 @@ DB_PGPASSWORD='<db-password>' \
 DB_NAME='<db-name>' \
 REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump' \
 TARGET='https://<app-host>' \
-SEED_FILE="$PWD/scripts/seed_codes.json" \
 LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
 BASE_RPS=200 \
 MODE=realistic \
@@ -93,7 +92,7 @@ MODE=realistic \
 
 ## Example: Smoke Run
 
-Use this first after changing the app image, seed file, or dump.
+Use this first after changing the app image or dump.
 
 ```bash
 DB_VM_HOST='<db-vm-ip>' \
@@ -102,7 +101,6 @@ DB_PGPASSWORD='<db-password>' \
 DB_NAME='<db-name>' \
 REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump' \
 TARGET='https://<app-host>' \
-SEED_FILE="$PWD/scripts/seed_codes.json" \
 LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
 BASE_RPS=50 \
 MODE=realistic \
@@ -112,11 +110,11 @@ MODE=realistic \
 ## Example: Skip Restore
 
 Only use this when you are certain the DB is already in the correct baseline state.
+If you omit `SEED_FILE`, the script still needs DB VM access so it can export seed codes from the live dataset.
 
 ```bash
 DB_NAME='<db-name>' \
 TARGET='https://<app-host>' \
-SEED_FILE="$PWD/scripts/seed_codes.json" \
 LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
 SKIP_RESTORE=true \
 BASE_RPS=200 \
@@ -132,6 +130,7 @@ Important files:
 
 - `run-metadata.env`: run parameters and derived values
 - `git-status.txt`: local uncommitted changes at run time, if any
+- `seed_codes.generated.json`: seed codes exported from the restored DB unless `SEED_FILE` override is used
 - `k6-summary.json`: machine-readable summary
   - does not include `setup_data`, so seed codes are not stored in the summary artifact
 - `k6-output.log`: raw `k6` console output
@@ -152,18 +151,17 @@ If `k6` exits non-zero because thresholds fail, the script still captures:
 If the script fails before `k6` starts, check these first:
 
 - `seed file not found`
-  - verify `SEED_FILE` on the Jump VM
+  - verify the optional `SEED_FILE` override on the Jump VM
 
 - `restored row count mismatch`
-  - the dump and seed file likely do not belong to the same dataset
-  - confirm the correct dump path and seed file
+  - confirm the correct dump path and expected row count
 
 - `app did not become ready`
   - check the app pods, ingress, and `/readyz`
 
 - `seed validation failed for code ... expected 302`
-  - the restored DB does not match the seed file
-  - or the app is serving the wrong database/state
+  - the app is serving the wrong database/state
+  - or the export/readiness order is racing with an incomplete rollout
 
 - `failed to capture metrics snapshot`
   - verify `$TARGET/metrics`
@@ -179,7 +177,7 @@ If `k6` starts but results look wrong, check:
 ## Operational Notes
 
 - Keep the dump file on the DB VM for simplicity and repeatability.
-- Keep `seed_codes.json` on the Jump VM and update it together with the dump.
+- Let the benchmark script export the seed file from the restored DB so the dataset stays self-consistent.
 - Do not change the app image, replica count, or benchmark parameters mid-series if you want comparable numbers.
 - For published results, record the app git SHA, target RPS, p95, p99, error rate, and the main bottleneck you observed.
 
@@ -194,7 +192,6 @@ DB_PGPASSWORD='<db-password>' \
 DB_NAME='<db-name>' \
 REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump' \
 TARGET='https://<app-host>' \
-SEED_FILE="$PWD/scripts/seed_codes.json" \
 LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
 SPIKE_MULT=1 \
 BASE_RPS=100 \
