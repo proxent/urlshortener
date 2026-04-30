@@ -1,10 +1,14 @@
-name: OKE Image Build
+name: OKE Image Build and Promote
 
 on:
   workflow_dispatch:
 
+concurrency:
+  group: oke-cd-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: read
+  contents: write
 
 env:
   IMAGE_NAME: url-shortener
@@ -14,8 +18,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Ensure branch ref
+        if: ${{ github.ref_type != 'branch' }}
+        run: |
+          echo "OKE image promotion must run from a branch so it can push manifest changes."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -33,6 +45,18 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Set up Kustomize
+        run: |
+          go install sigs.k8s.io/kustomize/kustomize/v5@v5.7.1
+          echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
+          "${HOME}/go/bin/kustomize" version
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -56,6 +80,7 @@ jobs:
             type=sha
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,10 +89,27 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Print image tag for manual Argo CD deployment
+      - name: Update Kustomize image
         env:
           IMAGE_REPO: ${{ secrets.OCIR_REGISTRY }}/${{ secrets.OCIR_NAMESPACE }}/${{ secrets.OCIR_REPOSITORY || env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          IMAGE_REF="${IMAGE_REPO}@${IMAGE_DIGEST}"
           echo "Built image tag: ${{ steps.meta.outputs.version }}"
-          echo "Use this image in k8s/oke/deployment.yaml before Argo CD sync:"
-          echo "${IMAGE_REPO}:${{ steps.meta.outputs.version }}"
+          echo "Built image digest: ${IMAGE_REF}"
+          cd k8s/oke
+          kustomize edit set image "${IMAGE_REPO}=${IMAGE_REF}"
+          kustomize build . >/tmp/oke-manifests.yaml
+
+      - name: Commit Kubernetes image promotion
+        run: |
+          if git diff --quiet -- k8s/oke/kustomization.yaml; then
+            echo "Kustomization already references this image digest."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/oke/kustomization.yaml
+          git commit -m "chore: promote OKE image ${{ steps.meta.outputs.version }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

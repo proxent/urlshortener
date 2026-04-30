@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secretstore.yaml
+  - externalsecret.yaml
+  - deployment.yaml
+  - service.yaml
+  - issuer.yaml
+  - ingress.yaml
+
+images:
+  - name: phx.ocir.io/ax4dlruayn0q/url-shortener-repository
+    newName: phx.ocir.io/ax4dlruayn0q/url-shortener-repository
+    newTag: sha-d5e1141
