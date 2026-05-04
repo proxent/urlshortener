@@ -13,7 +13,9 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "format": "prettier \"src/**/*.{ts,tsx}\" --write",
     "format:check": "prettier \"src/**/*.{ts,tsx}\" --check",
-    "loadtest": "docker run --rm -i -v $(pwd)/scripts:/scripts grafana/k6 run scripts/loadtest.js"
+    "loadtest": "docker run --rm -i -v $(pwd)/scripts:/scripts grafana/k6 run scripts/loadtest.js",
+    "benchmark:series": "./scripts/run-benchmark-series.sh",
+    "benchmark:summary": "node scripts/summarize-benchmarks.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

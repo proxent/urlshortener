@@ -202,6 +202,8 @@ There is no public listing endpoint.
 - `pnpm format`: format `src/**/*.{ts,tsx}` with Prettier
 - `pnpm format:check`: check Prettier formatting
 - `pnpm loadtest`: run the default k6 scenario in Docker
+- `pnpm benchmark:series`: run repeated Jump VM benchmark runs
+- `pnpm benchmark:summary`: summarize existing benchmark run directories
 
 Operational helpers:
 
@@ -209,6 +211,8 @@ Operational helpers:
 - `scripts/make_seeds.js`: pre-create short codes for load tests
 - `scripts/restore-db.sh`: restore a PostgreSQL dump into a benchmark/local database
 - `scripts/run-benchmark.sh`: repeatable Jump VM benchmark entrypoint
+- `scripts/run-benchmark-series.sh`: repeated-run wrapper for publishable benchmark statistics
+- `scripts/summarize-benchmarks.js`: run-level aggregate summary generator
 
 ## Testing, Load Testing, And Monitoring
 
@@ -218,6 +222,7 @@ For load testing:
 
 - `scripts/loadtest.js` defines the k6 traffic model
 - `scripts/BENCHMARK.md` documents the repeatable Jump VM benchmark workflow
+- Use `scripts/run-benchmark-series.sh` for public results; it reports run-level mean, sample standard deviation, median, and IQR.
 - `LOADTEST_BYPASS_KEY` can be used with `x-loadtest-key` to avoid measuring shorten rate limiting during load tests
 
 For monitoring:

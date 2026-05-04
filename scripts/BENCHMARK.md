@@ -1,6 +1,7 @@
 # Benchmark Workflow
 
-`run-benchmark.sh` is the single entrypoint for repeatable benchmark runs from the Jump VM.
+`run-benchmark.sh` is the single entrypoint for one repeatable benchmark run from the Jump VM.
+Use `run-benchmark-series.sh` when you need repeated runs and run-level statistics for published results.
 
 It is designed to keep the benchmark start state stable:
 
@@ -60,6 +61,7 @@ These are required unless `SKIP_RESTORE=true` and `SEED_FILE` is provided.
 - `MAX_VUS`: k6 max VUs
 - `HOT_SET_PCT`: hot key set percentage
 - `HOT_RATIO`: hot key hit ratio
+- `BENCHMARK_RUNS`: number of repeated runs for `run-benchmark-series.sh`. Default: `5`
 
 ## Environment-Specific Values
 
@@ -89,6 +91,41 @@ BASE_RPS=200 \
 MODE=realistic \
 ./scripts/run-benchmark.sh realistic-200rps
 ```
+
+## Example: Repeated Series
+
+Use this for numbers you plan to publish. The series wrapper runs the same benchmark repeatedly,
+continues after k6 threshold failures, aborts repeated setup failures, and writes aggregate statistics after all runs finish.
+
+```bash
+DB_VM_HOST='<db-vm-ip>' \
+DB_VM_SSH_KEY="$HOME/.ssh/<db-vm-key>" \
+DB_PGPASSWORD='<db-password>' \
+DB_NAME='<db-name>' \
+REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump' \
+TARGET='https://<app-host>' \
+LOADTEST_BYPASS_KEY='<loadtest-bypass-key>' \
+BASE_RPS=450 \
+SPIKE_MULT=1 \
+MODE=realistic \
+BENCHMARK_RUNS=5 \
+./scripts/run-benchmark-series.sh steady-450rps-public
+```
+
+The wrapper creates:
+
+- `benchmark-results/steady-450rps-public-r01/` through `r05/`
+- `benchmark-results/steady-450rps-public-series/series-summary.md`
+- `benchmark-results/steady-450rps-public-series/series-summary.json`
+
+The aggregate table uses only valid runs:
+
+- `K6_EXIT_CODE` is `0` when present
+- global `dropped_iterations` is `0`
+- `http_req_failed` is below `1%`
+- endpoint success rates are above `99%`
+
+If all runs are invalid, the summary still reports diagnostic aggregates but those numbers should not be published as passing results.
 
 ## Example: Smoke Run
 
@@ -132,6 +169,7 @@ Important files:
 - `git-status.txt`: local uncommitted changes at run time, if any
 - `seed_codes.generated.json`: seed codes exported from the restored DB unless `SEED_FILE` override is used
 - `k6-summary.json`: machine-readable summary
+  - includes `p(99)` because `summaryTrendStats` is set in `scripts/loadtest.js`
   - does not include `setup_data`, so seed codes are not stored in the summary artifact
 - `k6-output.log`: raw `k6` console output
 - `metrics-pre-restore.prom`: app metrics before DB restore
@@ -174,12 +212,34 @@ If `k6` starts but results look wrong, check:
 - `dropped_iterations`
 - Grafana panels for app and PostgreSQL
 
+## Reproducible Reporting
+
+For public claims, do not report a single run as the result. Report run-level aggregates from a repeated series.
+
+Recommended minimums:
+
+- LinkedIn or project write-up: at least `5` runs per condition
+- more formal write-up: `10+` runs per condition, with raw artifacts kept
+
+Report at least:
+
+- app git SHA
+- dataset size and seed source
+- target RPS and achieved req/s
+- traffic mix, `MODE`, `HOT_SET_PCT`, and `HOT_RATIO`
+- p95 and p99 latency for redirect and shorten
+- `http_req_failed`
+- global `dropped_iterations`
+- number of valid runs and excluded runs
+
+Prefer median and IQR for latency percentiles, and include mean and sample standard deviation as secondary context.
+
 ## Operational Notes
 
 - Keep the dump file on the DB VM for simplicity and repeatability.
 - Let the benchmark script export the seed file from the restored DB so the dataset stays self-consistent.
 - Do not change the app image, replica count, or benchmark parameters mid-series if you want comparable numbers.
-- For published results, record the app git SHA, target RPS, p95, p99, error rate, and the main bottleneck you observed.
+- For published results, record the app git SHA, target RPS, achieved RPS, p95, p99, error rate, dropped iterations, number of repeated runs, and the main bottleneck you observed.
 
 ## Recommended Breakpoint Runs
 

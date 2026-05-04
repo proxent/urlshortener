@@ -87,6 +87,8 @@ export const options = (() => {
     maxRedirects: 0,
     // Keep logs free of generated response payloads; this benchmark only needs status/timing signals.
     discardResponseBodies: true,
+    // Include p99 in --summary-export so repeated-run analysis does not need to scrape console logs.
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
     thresholds: {
       // Overall failure rate (redirect + shorten) — only for the run phase
       'http_req_failed{phase:run}': ['rate<0.01'],
@@ -104,6 +106,7 @@ export const options = (() => {
       shorten_success_rate: ['rate>0.99'],
 
       // If dropped iterations occur, the generator couldn't keep up (VU shortage / client-side bottleneck)
+      dropped_iterations: ['count==0'],
       'dropped_iterations{phase:run}': ['count==0'],
     },
 
@@ -116,6 +119,7 @@ export const options = (() => {
         preAllocatedVUs: PRE_VUS,
         maxVUs: MAX_VUS,
         exec: 'redirectExec',
+        tags: { phase: 'run' },
       },
       shorten_traffic: {
         executor: 'ramping-arrival-rate',
@@ -125,6 +129,7 @@ export const options = (() => {
         preAllocatedVUs: Math.max(10, Math.floor(PRE_VUS * 0.2)),
         maxVUs: Math.max(50, Math.floor(MAX_VUS * 0.3)),
         exec: 'shortenExec',
+        tags: { phase: 'run' },
       },
     },
   };
