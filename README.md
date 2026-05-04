@@ -258,7 +258,6 @@ When Argo CD syncs the Application, it renders the Kustomization and applies the
 
 Included in the Kustomization:
 
-- Namespace
 - ConfigMap
 - ExternalSecret and SecretStore
 - Deployment
@@ -268,6 +267,7 @@ Included in the Kustomization:
 
 Not included in the Kustomization:
 
+- `namespace.yaml`: bootstrap resource; the `url-shortener` namespace must exist before syncing the app
 - `job-migrate.yaml`: Prisma migration Job kept for manual schema-change operations
 - `ingress-nginx.yaml`: Helm values for NGINX Ingress Controller, not a Kubernetes manifest
 
