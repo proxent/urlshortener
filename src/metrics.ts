@@ -54,7 +54,7 @@ const getRouteLabel = (req: Request): string => {
     return `${req.baseUrl || ''}${req.route.path}` || req.route.path;
   }
 
-  return `${req.baseUrl || ''}${req.path || 'unmatched'}` || 'unmatched';
+  return 'unmatched';
 };
 
 export const prometheusMiddleware: RequestHandler = (req, res, next) => {
