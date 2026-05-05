@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: url-shortener-config
+  namespace: url-shortener
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  # Set to the public URL that fronts the app (must not be localhost in production)
+  BASE_URL: "https://141-148-185-116.nip.io"
+  TRUST_PROXY: "1"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX_SHORTEN: "60"

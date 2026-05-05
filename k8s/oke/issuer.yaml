@@ -1,0 +1,34 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-staging
+  namespace: url-shortener
+spec:
+  acme:
+    # Replace with your email for ACME account notifications/recovery
+    email: chanjin97gm@gmail.com
+    # Staging endpoint: safe for testing without Let's Encrypt production limits
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-prod
+  namespace: url-shortener
+spec:
+  acme:
+    # Replace with your email for ACME account notifications/recovery
+    email: chanjin97gm@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

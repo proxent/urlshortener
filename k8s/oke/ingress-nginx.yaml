@@ -1,0 +1,15 @@
+controller:
+  service:
+    # Key point: set the load balancer type to 'nlb'
+    annotations:
+      oci.oraclecloud.com/load-balancer-type: "nlb"
+      oci.oraclecloud.com/security-rule-management-mode: "NSG"
+      # NLB does not require Flexible Shape (Mbps) settings. (Can be removed)
+      # Local traffic policy is recommended (preserves client IP)
+    externalTrafficPolicy: Local
+    
+    # NLB is L4, so http/https ports are opened as-is.
+    ports:
+      http: 80
+      https: 443
+  
