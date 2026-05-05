@@ -7,7 +7,7 @@ It is designed to keep the benchmark start state stable:
 
 1. capture a pre-restore metrics snapshot
 2. restore the baseline dump on the DB VM
-3. verify the restored `"Url"` row count
+3. record the restored `"Url"` row count, or verify it when `EXPECTED_URL_COUNT` is set
 4. export seed codes from the restored DB
 5. wait for the app readiness endpoint
 6. smoke-check a few seed codes against `/r/:code`
@@ -20,7 +20,7 @@ It is designed to keep the benchmark start state stable:
 
 - `k6` does not generate seed data at runtime
 - the DB is restored before each benchmark run unless `SKIP_RESTORE=true`
-- the restored dataset is checked against the expected row count
+- the restored dataset is checked against `EXPECTED_URL_COUNT`, or against the exported seed count when `EXPECTED_URL_COUNT` is omitted
 - the seed file is exported from the restored DB by default and smoke-tested before the load test starts
 - benchmark outputs are saved with enough metadata to compare runs later
 
@@ -144,8 +144,11 @@ BENCHMARK_RUNS=5 \
 The wrapper creates:
 
 - `benchmark-results/steady-450rps-public-r01/` through `r05/`
-- `benchmark-results/steady-450rps-public-series/series-summary.md`
-- `benchmark-results/steady-450rps-public-series/series-summary.json`
+- `benchmark-results/steady-450rps-public-series/series-summary.md` when `node` is available
+- `benchmark-results/steady-450rps-public-series/series-summary.json` when `node` is available
+
+Install Node.js on the Jump VM when you need aggregate series summaries there.
+Without Node.js, the wrapper still runs the benchmark series and records run directories plus exit codes.
 
 The aggregate table uses only valid runs:
 

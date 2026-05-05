@@ -98,6 +98,8 @@ SKIP_RESTORE=${SKIP_RESTORE:-false}
 SEED_FILE=${SEED_FILE:-}
 EXPECTED_URL_COUNT=${EXPECTED_URL_COUNT:-}
 SKIP_ROW_COUNT_CHECK=${SKIP_ROW_COUNT_CHECK:-false}
+RESTORED_URL_COUNT=
+ROW_COUNT_VERIFIED=false
 SEED_SMOKE_SAMPLE_SIZE=${SEED_SMOKE_SAMPLE_SIZE:-5}
 LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY:-bypass}
 
@@ -309,22 +311,27 @@ validate_row_count() {
     return 0
   fi
 
-  local actual_url_count
-  actual_url_count=$(query_remote_url_count | tr -d '[:space:]')
+  RESTORED_URL_COUNT=$(query_remote_url_count | tr -d '[:space:]')
 
-  if ! [[ "$actual_url_count" =~ ^[0-9]+$ ]]; then
-    echo "[benchmark] invalid restored row count: ${actual_url_count}" >&2
+  if ! [[ "$RESTORED_URL_COUNT" =~ ^[0-9]+$ ]]; then
+    echo "[benchmark] invalid restored row count: ${RESTORED_URL_COUNT}" >&2
     exit 1
   fi
 
-  append_metadata "RESTORED_URL_COUNT" "$actual_url_count"
+  append_metadata "RESTORED_URL_COUNT" "$RESTORED_URL_COUNT"
 
-  if [ "$actual_url_count" != "$EXPECTED_URL_COUNT" ]; then
-    echo "[benchmark] restored row count mismatch: expected ${EXPECTED_URL_COUNT}, got ${actual_url_count}" >&2
+  if [ -z "$EXPECTED_URL_COUNT" ]; then
+    echo "[benchmark] restored row count observed: ${RESTORED_URL_COUNT}; strict check deferred until seed count is known"
+    return 0
+  fi
+
+  if [ "$RESTORED_URL_COUNT" != "$EXPECTED_URL_COUNT" ]; then
+    echo "[benchmark] restored row count mismatch: expected ${EXPECTED_URL_COUNT}, got ${RESTORED_URL_COUNT}" >&2
     exit 1
   fi
 
-  echo "[benchmark] restored row count verified: ${actual_url_count}"
+  ROW_COUNT_VERIFIED=true
+  echo "[benchmark] restored row count verified: ${RESTORED_URL_COUNT}"
 }
 
 generate_seed_file() {
@@ -373,6 +380,16 @@ EOF
 
   if [ "$SEED_FILE" = "$GENERATED_SEED_FILE" ]; then
     append_metadata "GENERATED_SEED_FILE" "$GENERATED_SEED_FILE"
+  fi
+
+  if [ "$SKIP_ROW_COUNT_CHECK" != "true" ] && [ "$SKIP_RESTORE" != "true" ] && [ -n "$RESTORED_URL_COUNT" ] && [ "$ROW_COUNT_VERIFIED" != "true" ]; then
+    if [ "$RESTORED_URL_COUNT" != "$EXPECTED_URL_COUNT" ]; then
+      echo "[benchmark] restored row count mismatch: expected ${EXPECTED_URL_COUNT}, got ${RESTORED_URL_COUNT}" >&2
+      exit 1
+    fi
+
+    ROW_COUNT_VERIFIED=true
+    echo "[benchmark] restored row count verified: ${RESTORED_URL_COUNT}"
   fi
 
   echo "[benchmark] seed file ready: ${SEED_FILE} (${seed_code_count} codes)"

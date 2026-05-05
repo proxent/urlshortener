@@ -81,19 +81,33 @@ for run_index in $(seq 1 "$BENCHMARK_RUNS"); do
 done
 
 echo "[benchmark-series] summarizing run-level results"
-node "${SCRIPT_DIR}/summarize-benchmarks.js" \
-  --markdown-out "$SUMMARY_MARKDOWN_FILE" \
-  --json-out "$SUMMARY_JSON_FILE" \
-  "${run_dirs[@]}"
+if command -v node >/dev/null 2>&1; then
+  node "${SCRIPT_DIR}/summarize-benchmarks.js" \
+    --markdown-out "$SUMMARY_MARKDOWN_FILE" \
+    --json-out "$SUMMARY_JSON_FILE" \
+    "${run_dirs[@]}"
+else
+  echo "[benchmark-series] node not found; skipping series summary generation" >&2
+  SUMMARY_MARKDOWN_FILE=
+  SUMMARY_JSON_FILE=
+fi
 
 {
   printf '%s\n' "$RUN_DIRS_FILE"
   printf '%s\n' "$EXIT_CODES_FILE"
-  printf '%s\n' "$SUMMARY_MARKDOWN_FILE"
-  printf '%s\n' "$SUMMARY_JSON_FILE"
+  if [ -n "$SUMMARY_MARKDOWN_FILE" ]; then
+    printf '%s\n' "$SUMMARY_MARKDOWN_FILE"
+  fi
+  if [ -n "$SUMMARY_JSON_FILE" ]; then
+    printf '%s\n' "$SUMMARY_JSON_FILE"
+  fi
 } > "$ARTIFACTS_FILE"
 
-echo "[benchmark-series] summary saved to ${SERIES_RESULT_DIR}"
+if [ -n "$SUMMARY_MARKDOWN_FILE" ]; then
+  echo "[benchmark-series] summary saved to ${SERIES_RESULT_DIR}"
+else
+  echo "[benchmark-series] series artifacts saved to ${SERIES_RESULT_DIR}"
+fi
 
 if [ "$series_exit_code" -ne 0 ]; then
   echo "[benchmark-series] one or more runs failed thresholds or setup checks" >&2
