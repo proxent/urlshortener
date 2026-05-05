@@ -243,6 +243,7 @@ For monitoring:
 `.github/workflows/oke-cd.yml` is manually triggered with `workflow_dispatch`:
 
 - build from the selected `source_ref`
+- generate the Prisma client when the selected source has a Prisma schema
 - run tests for that source ref
 - build and push a linux/arm64 image to OCIR
 - capture the pushed image digest

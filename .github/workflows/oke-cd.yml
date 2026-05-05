@@ -68,6 +68,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: |
+          if [ -f prisma/schema.prisma ]; then
+            pnpm prisma generate
+          fi
+
       - name: Run tests
         run: pnpm test
 
