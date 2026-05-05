@@ -39,6 +39,35 @@ These are required unless `SKIP_RESTORE=true` and `SEED_FILE` is provided.
 - `DB_PGPASSWORD`: PostgreSQL password on the DB VM
 - `REMOTE_DUMP_PATH`: dump file path on the DB VM
 
+`run-benchmark.sh` and `run-benchmark-series.sh` automatically load
+`~/.config/urlshortener/benchmark.env` when it exists. Keep fixed secrets and
+infrastructure values there, outside the repository:
+
+```bash
+mkdir -p ~/.config/urlshortener
+chmod 700 ~/.config/urlshortener
+$EDITOR ~/.config/urlshortener/benchmark.env
+chmod 600 ~/.config/urlshortener/benchmark.env
+```
+
+Example file:
+
+```bash
+export DB_VM_HOST='<db-vm-ip>'
+export DB_VM_SSH_KEY="$HOME/.ssh/<db-vm-key>"
+export DB_PGPASSWORD='<db-password>'
+export DB_NAME='<db-name>'
+export REMOTE_DUMP_PATH='/absolute/path/to/baseline.dump'
+export TARGET='https://<app-host>'
+export LOADTEST_BYPASS_KEY='<loadtest-bypass-key>'
+```
+
+Per-run shell assignments still override values from the env file:
+
+```bash
+MODE=realistic BASE_RPS=200 SPIKE_MULT=1 ./scripts/run-benchmark-series.sh baseline-4be9c3c
+```
+
 ## Important Optional Environment
 
 - `DB_VM_USER`: DB VM SSH user. Default: `opc`

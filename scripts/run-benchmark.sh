@@ -4,6 +4,9 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/.." && pwd)
 CURRENT_STEP="initializing"
+BENCHMARK_ENV_FILE=${BENCHMARK_ENV_FILE:-${HOME}/.config/urlshortener/benchmark.env}
+
+source "${SCRIPT_DIR}/load-benchmark-env.sh"
 
 set_step() {
   CURRENT_STEP=$1
@@ -67,6 +70,11 @@ EOF
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   usage
   exit 0
+fi
+
+if [ -f "$BENCHMARK_ENV_FILE" ]; then
+  load_benchmark_env_file "$BENCHMARK_ENV_FILE"
+  echo "[benchmark] loaded environment from ${BENCHMARK_ENV_FILE}"
 fi
 
 TARGET=${TARGET:-https://141-148-185-116.nip.io}

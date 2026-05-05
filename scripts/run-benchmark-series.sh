@@ -3,6 +3,9 @@ set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/.." && pwd)
+BENCHMARK_ENV_FILE=${BENCHMARK_ENV_FILE:-${HOME}/.config/urlshortener/benchmark.env}
+
+source "${SCRIPT_DIR}/load-benchmark-env.sh"
 
 usage() {
   printf '%s\n' "Usage:"
@@ -15,6 +18,11 @@ usage() {
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   usage
   exit 0
+fi
+
+if [ -f "$BENCHMARK_ENV_FILE" ]; then
+  load_benchmark_env_file "$BENCHMARK_ENV_FILE"
+  echo "[benchmark-series] loaded environment from ${BENCHMARK_ENV_FILE}"
 fi
 
 BENCHMARK_RUNS=${BENCHMARK_RUNS:-5}
