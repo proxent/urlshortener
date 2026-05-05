@@ -242,17 +242,21 @@ For monitoring:
 
 `.github/workflows/oke-cd.yml` is manually triggered with `workflow_dispatch`:
 
-- run tests
+- build from the selected `source_ref`
+- run tests for that source ref
 - build and push a linux/arm64 image to OCIR
 - capture the pushed image digest
-- run `kustomize edit set image` in `k8s/oke`
-- commit the updated `k8s/oke/kustomization.yaml` back to the current branch
+- copy the latest `k8s/oke` manifests from `manifest_ref`
+- update the image digest with `kustomize edit set image`
+- commit the deploy state to `deploy_branch`, which is the branch Argo CD should watch
 
-The OKE workflow needs the OCIR secrets configured in GitHub Actions and branch permissions that allow `GITHUB_TOKEN` to push the promotion commit.
+Run the workflow from a branch that contains the current workflow definition, usually `main`; use `source_ref` to choose the app commit to build.
+
+The OKE workflow needs the OCIR secrets configured in GitHub Actions and branch permissions that allow `GITHUB_TOKEN` to push the promotion commit to `deploy_branch`.
 
 ## Kubernetes And Argo CD
 
-`k8s/oke/kustomization.yaml` is the Argo CD entrypoint for the OKE app. The Argo CD Application should point its source path at `k8s/oke`.
+`k8s/oke/kustomization.yaml` is the Argo CD entrypoint for the OKE app. The Argo CD Application should point its source path at `k8s/oke` on the deploy branch, usually `deploy/oke`.
 
 When Argo CD syncs the Application, it renders the Kustomization and applies the resulting Kubernetes resources. You sync the Argo CD Application, not `kustomization.yaml` as a standalone Kubernetes object.
 
@@ -271,7 +275,7 @@ Not included in the Kustomization:
 - `job-migrate.yaml`: Prisma migration Job kept for manual schema-change operations
 - `ingress-nginx.yaml`: Helm values for NGINX Ingress Controller, not a Kubernetes manifest
 
-For normal app deployments, run the OKE image workflow, let it commit the new digest into `kustomization.yaml`, then refresh and sync the Argo CD Application. Run the migration Job separately only for releases that need database schema changes.
+For normal app deployments, run the OKE image workflow with `source_ref=main`, `manifest_ref=main`, and `deploy_branch=deploy/oke`, then refresh and sync the Argo CD Application. To compare older commits, set `source_ref` to the commit SHA while keeping `manifest_ref=main` so the app image comes from the selected commit but Kubernetes manifests stay current. Run the migration Job separately only for releases that need database schema changes.
 
 ## Roadmap
 

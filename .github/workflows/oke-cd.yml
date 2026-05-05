@@ -2,9 +2,25 @@ name: OKE Image Build and Promote
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Branch, tag, or commit SHA to build the application image from'
+        required: true
+        default: 'main'
+        type: string
+      manifest_ref:
+        description: 'Branch, tag, or commit SHA to copy the latest k8s/oke manifests from'
+        required: true
+        default: 'main'
+        type: string
+      deploy_branch:
+        description: 'GitOps branch watched by Argo CD'
+        required: true
+        default: 'deploy/oke'
+        type: string
 
 concurrency:
-  group: oke-cd-${{ github.ref }}
+  group: oke-cd-${{ inputs.deploy_branch }}
   cancel-in-progress: false
 
 permissions:
@@ -17,21 +33,26 @@ jobs:
   build-push:
     runs-on: ubuntu-latest
     outputs:
-      image_version: ${{ steps.meta.outputs.version }}
+      image_version: ${{ steps.source.outputs.image_version }}
       image_digest: ${{ steps.build.outputs.digest }}
+      source_revision: ${{ steps.source.outputs.revision }}
 
     steps:
-      - name: Ensure branch ref
-        if: ${{ github.ref_type != 'branch' }}
-        run: |
-          echo "OKE image promotion must run from a branch so it can push manifest changes."
-          exit 1
-
-      - name: Checkout
+      - name: Checkout source ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve source revision
+        id: source
+        run: |
+          REVISION="$(git rev-parse HEAD)"
+          SHORT_REVISION="$(git rev-parse --short=12 HEAD)"
+          echo "revision=${REVISION}" >> "${GITHUB_OUTPUT}"
+          echo "short_revision=${SHORT_REVISION}" >> "${GITHUB_OUTPUT}"
+          echo "image_version=sha-${SHORT_REVISION}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -49,12 +70,6 @@ jobs:
 
       - name: Run tests
         run: pnpm test
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.x'
-          cache: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -75,7 +90,9 @@ jobs:
         with:
           images: ${{ secrets.OCIR_REGISTRY }}/${{ secrets.OCIR_NAMESPACE }}/${{ secrets.OCIR_REPOSITORY || env.IMAGE_NAME }}
           tags: |
-            type=sha
+            type=raw,value=${{ steps.source.outputs.image_version }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.source.outputs.revision }}
 
       - name: Build and push image
         id: build
@@ -94,10 +111,11 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout
+      - name: Checkout latest manifests
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ inputs.manifest_ref }}
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -111,27 +129,71 @@ jobs:
           echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
           "${HOME}/go/bin/kustomize" version
 
-      - name: Update Kustomize image
+      - name: Prepare deploy branch manifests
+        env:
+          DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+        run: |
+          if ! git check-ref-format --branch "${DEPLOY_BRANCH}" >/dev/null; then
+            echo "Invalid deploy_branch: ${DEPLOY_BRANCH}"
+            exit 1
+          fi
+
+          if [ ! -f k8s/oke/kustomization.yaml ]; then
+            echo "manifest_ref must contain k8s/oke/kustomization.yaml"
+            exit 1
+          fi
+
+          MANIFEST_SOURCE="$(mktemp -d)"
+          cp -a k8s/oke/. "${MANIFEST_SOURCE}/"
+
+          if git ls-remote --exit-code --heads origin "${DEPLOY_BRANCH}" >/dev/null; then
+            git fetch origin "refs/heads/${DEPLOY_BRANCH}:refs/heads/${DEPLOY_BRANCH}"
+          fi
+
+          if git show-ref --verify --quiet "refs/heads/${DEPLOY_BRANCH}"; then
+            git switch "${DEPLOY_BRANCH}"
+          else
+            git switch --orphan "${DEPLOY_BRANCH}"
+            git rm -r --ignore-unmatch .
+          fi
+
+          mkdir -p k8s/oke
+          find k8s/oke -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          cp -a "${MANIFEST_SOURCE}/." k8s/oke/
+
+      - name: Update deploy image
         env:
           IMAGE_REPO: ${{ secrets.OCIR_REGISTRY }}/${{ secrets.OCIR_NAMESPACE }}/${{ secrets.OCIR_REPOSITORY || env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ needs.build-push.outputs.image_digest }}
+          IMAGE_VERSION: ${{ needs.build-push.outputs.image_version }}
+          SOURCE_REVISION: ${{ needs.build-push.outputs.source_revision }}
         run: |
+          if ! printf '%s' "${IMAGE_DIGEST}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+            echo "Invalid image digest from build: ${IMAGE_DIGEST}"
+            exit 1
+          fi
+
           IMAGE_REF="${IMAGE_REPO}@${IMAGE_DIGEST}"
-          echo "Built image tag: ${{ needs.build-push.outputs.image_version }}"
+          echo "Built image tag: ${IMAGE_VERSION}"
           echo "Built image digest: ${IMAGE_REF}"
+          echo "Built source revision: ${SOURCE_REVISION}"
           cd k8s/oke
           kustomize edit set image "${IMAGE_REPO}=${IMAGE_REF}"
           kustomize build . >/tmp/oke-manifests.yaml
 
       - name: Commit Kubernetes image promotion
+        env:
+          DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+          IMAGE_VERSION: ${{ needs.build-push.outputs.image_version }}
+          SOURCE_REVISION: ${{ needs.build-push.outputs.source_revision }}
         run: |
-          if git diff --quiet -- k8s/oke/kustomization.yaml; then
-            echo "Kustomization already references this image digest."
+          if [ -z "$(git status --porcelain -- k8s/oke)" ]; then
+            echo "Deploy branch already references this manifest state and image digest."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add k8s/oke/kustomization.yaml
-          git commit -m "chore: promote OKE image ${{ needs.build-push.outputs.image_version }}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git add k8s/oke
+          git commit -m "chore: promote OKE image ${IMAGE_VERSION}" -m "Source revision: ${SOURCE_REVISION}"
+          git push origin "HEAD:${DEPLOY_BRANCH}"
