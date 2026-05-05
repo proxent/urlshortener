@@ -38,17 +38,29 @@ jobs:
       source_revision: ${{ steps.source.outputs.revision }}
 
     steps:
-      - name: Checkout source ref
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_ref }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve source revision
+      - name: Checkout source ref
         id: source
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          REVISION="$(git rev-parse HEAD)"
+          git fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+          if REVISION="$(git rev-parse --verify "${SOURCE_REF}^{commit}" 2>/dev/null)"; then
+            :
+          elif REVISION="$(git rev-parse --verify "origin/${SOURCE_REF}^{commit}" 2>/dev/null)"; then
+            :
+          else
+            echo "source_ref must resolve to a branch, tag, full commit SHA, or unique short commit SHA: ${SOURCE_REF}"
+            exit 1
+          fi
+
+          git checkout --detach "${REVISION}"
           SHORT_REVISION="$(git rev-parse --short=12 HEAD)"
           echo "revision=${REVISION}" >> "${GITHUB_OUTPUT}"
           echo "short_revision=${SHORT_REVISION}" >> "${GITHUB_OUTPUT}"
