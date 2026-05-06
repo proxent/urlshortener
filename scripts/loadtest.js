@@ -18,6 +18,7 @@ const FILE_CODES = SEED_FILE
 // --------------------
 const TARGET = (__ENV.TARGET || 'http://localhost:3000').replace(/\/$/, '');
 const LOADTEST_BYPASS_KEY = __ENV.LOADTEST_BYPASS_KEY || '';
+const LOADTEST_DURATION = __ENV.LOADTEST_DURATION || '';
 
 // Total target RPS (redirect + shorten combined)
 const BASE_RPS = parseInt(__ENV.BASE_RPS || '500', 10);
@@ -66,6 +67,89 @@ const shortenConnecting = new Trend('shorten_connecting_ms');
 const redirectTlsHandshaking = new Trend('redirect_tls_handshaking_ms');
 const shortenTlsHandshaking = new Trend('shorten_tls_handshaking_ms');
 
+function parseDurationToSeconds(value) {
+  const normalized = String(value || '').trim().replace(/\s+/g, '');
+  if (!normalized) return null;
+
+  if (/^\d+$/.test(normalized)) {
+    return parseInt(normalized, 10);
+  }
+
+  const partPattern = /(\d+)(ms|s|m|h)/g;
+  let match;
+  let consumed = '';
+  let seconds = 0;
+
+  while ((match = partPattern.exec(normalized)) !== null) {
+    consumed += match[0];
+    const amount = parseInt(match[1], 10);
+    const unit = match[2];
+
+    if (unit === 'ms') seconds += amount / 1000;
+    if (unit === 's') seconds += amount;
+    if (unit === 'm') seconds += amount * 60;
+    if (unit === 'h') seconds += amount * 60 * 60;
+  }
+
+  if (consumed !== normalized || seconds <= 0) {
+    throw new Error(`LOADTEST_DURATION must be a positive k6-style duration, got: ${value}`);
+  }
+
+  return seconds;
+}
+
+function formatDurationSeconds(seconds) {
+  return `${seconds}s`;
+}
+
+function scaleStageDurations(stages, totalDuration) {
+  const requestedTotalSeconds = parseDurationToSeconds(totalDuration);
+  if (!requestedTotalSeconds) {
+    return stages;
+  }
+
+  const totalSeconds = Math.round(requestedTotalSeconds);
+  if (totalSeconds < stages.length) {
+    throw new Error(
+      `LOADTEST_DURATION must be at least ${stages.length}s for ${stages.length} stages`,
+    );
+  }
+
+  const defaultDurations = stages.map((stage) => parseDurationToSeconds(stage.duration));
+  const defaultTotal = defaultDurations.reduce((sum, seconds) => sum + seconds, 0);
+  const rawDurations = defaultDurations.map((seconds) => (seconds / defaultTotal) * totalSeconds);
+  const scaledDurations = rawDurations.map((seconds) => Math.max(1, Math.floor(seconds)));
+
+  let remaining = totalSeconds - scaledDurations.reduce((sum, seconds) => sum + seconds, 0);
+
+  if (remaining > 0) {
+    const byFractionDescending = rawDurations
+      .map((seconds, index) => ({ index, fraction: seconds - Math.floor(seconds) }))
+      .sort((a, b) => b.fraction - a.fraction);
+
+    for (let cursor = 0; remaining > 0; cursor += 1) {
+      const { index } = byFractionDescending[cursor % byFractionDescending.length];
+      scaledDurations[index] += 1;
+      remaining -= 1;
+    }
+  }
+
+  if (remaining < 0) {
+    for (let cursor = scaledDurations.length - 1; remaining < 0; cursor -= 1) {
+      if (cursor < 0) cursor = scaledDurations.length - 1;
+      if (scaledDurations[cursor] <= 1) continue;
+
+      scaledDurations[cursor] -= 1;
+      remaining += 1;
+    }
+  }
+
+  return stages.map((stage, index) => ({
+    ...stage,
+    duration: formatDurationSeconds(scaledDurations[index]),
+  }));
+}
+
 // Prevent following redirects (measure only the 302 response)
 export const options = (() => {
   const baseStages = [
@@ -81,7 +165,8 @@ export const options = (() => {
     { target: BASE_RPS, duration: '12m' },
   ];
 
-  const stages = (MODE === 'cold' || MODE === 'warm') ? steadyOnly : baseStages;
+  const defaultStages = (MODE === 'cold' || MODE === 'warm') ? steadyOnly : baseStages;
+  const stages = scaleStageDurations(defaultStages, LOADTEST_DURATION);
 
   return {
     maxRedirects: 0,
@@ -222,6 +307,7 @@ k6 run \
   -e MODE=realistic \
   -e BASE_RPS=800 \
   -e SPIKE_MULT=3 \
+  -e LOADTEST_DURATION=60s \
   -e PRE_VUS=300 \
   -e MAX_VUS=3000 \
   loadtest.js

@@ -55,6 +55,7 @@ Optional environment:
   MODE              k6 mode: realistic|cold|warm (default: realistic)
   BASE_RPS          Total target RPS (default: 500)
   SPIKE_MULT        Spike multiplier (default: 3)
+  LOADTEST_DURATION Optional total k6 scenario duration override
   REDIRECT_RATIO    Redirect traffic ratio (default: 0.98)
   PRE_VUS           k6 pre-allocated VUs (default: 200)
   MAX_VUS           k6 max VUs (default: 2000)
@@ -106,6 +107,7 @@ LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY:-bypass}
 MODE=${MODE:-realistic}
 BASE_RPS=${BASE_RPS:-500}
 SPIKE_MULT=${SPIKE_MULT:-3}
+LOADTEST_DURATION=${LOADTEST_DURATION:-}
 REDIRECT_RATIO=${REDIRECT_RATIO:-0.98}
 PRE_VUS=${PRE_VUS:-200}
 MAX_VUS=${MAX_VUS:-2000}
@@ -113,6 +115,9 @@ HOT_SET_PCT=${HOT_SET_PCT:-0.01}
 HOT_RATIO=${HOT_RATIO:-0.6}
 
 RESULTS_BASE_DIR=${RESULTS_BASE_DIR:-${REPO_ROOT}/benchmark-results}
+if [[ "$RESULTS_BASE_DIR" != /* ]]; then
+  RESULTS_BASE_DIR="${REPO_ROOT}/${RESULTS_BASE_DIR}"
+fi
 WAIT_READY_TIMEOUT_SEC=${WAIT_READY_TIMEOUT_SEC:-180}
 WAIT_READY_INTERVAL_SEC=${WAIT_READY_INTERVAL_SEC:-5}
 CAPTURE_METRICS_SNAPSHOT=${CAPTURE_METRICS_SNAPSHOT:-true}
@@ -218,6 +223,7 @@ LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY}
 MODE=${MODE}
 BASE_RPS=${BASE_RPS}
 SPIKE_MULT=${SPIKE_MULT}
+LOADTEST_DURATION=${LOADTEST_DURATION}
 REDIRECT_RATIO=${REDIRECT_RATIO}
 PRE_VUS=${PRE_VUS}
 MAX_VUS=${MAX_VUS}
@@ -485,6 +491,7 @@ run_k6_local() {
     -e "MODE=${MODE}" \
     -e "BASE_RPS=${BASE_RPS}" \
     -e "SPIKE_MULT=${SPIKE_MULT}" \
+    -e "LOADTEST_DURATION=${LOADTEST_DURATION}" \
     -e "REDIRECT_RATIO=${REDIRECT_RATIO}" \
     -e "PRE_VUS=${PRE_VUS}" \
     -e "MAX_VUS=${MAX_VUS}" \
@@ -497,6 +504,8 @@ run_k6_local() {
 run_k6_docker() {
   local container_seed_file
   local container_seed_mount=""
+  local container_summary_file
+  local container_summary_mount=""
 
   if [[ "$SEED_FILE" == "${REPO_ROOT}/"* ]]; then
     container_seed_file="/workspace/${SEED_FILE#${REPO_ROOT}/}"
@@ -505,19 +514,28 @@ run_k6_docker() {
     container_seed_mount="-v ${SEED_FILE%/*}:/seed:ro"
   fi
 
+  if [[ "$K6_SUMMARY_FILE" == "${REPO_ROOT}/"* ]]; then
+    container_summary_file="/workspace/${K6_SUMMARY_FILE#${REPO_ROOT}/}"
+  else
+    container_summary_file="/result/$(basename "$K6_SUMMARY_FILE")"
+    container_summary_mount="-v ${RESULT_DIR}:/result"
+  fi
+
   # shellcheck disable=SC2086
   docker run --rm -i \
     -v "${REPO_ROOT}:/workspace" \
     $container_seed_mount \
+    $container_summary_mount \
     -w /workspace \
     grafana/k6 run \
-    --summary-export "/workspace/benchmark-results/${RUN_LABEL}/k6-summary.json" \
+    --summary-export "${container_summary_file}" \
     -e "TARGET=${TARGET}" \
     -e "LOADTEST_BYPASS_KEY=${LOADTEST_BYPASS_KEY}" \
     -e "SEED_FILE=${container_seed_file}" \
     -e "MODE=${MODE}" \
     -e "BASE_RPS=${BASE_RPS}" \
     -e "SPIKE_MULT=${SPIKE_MULT}" \
+    -e "LOADTEST_DURATION=${LOADTEST_DURATION}" \
     -e "REDIRECT_RATIO=${REDIRECT_RATIO}" \
     -e "PRE_VUS=${PRE_VUS}" \
     -e "MAX_VUS=${MAX_VUS}" \

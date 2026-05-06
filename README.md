@@ -212,6 +212,7 @@ Operational helpers:
 - `scripts/restore-db.sh`: restore a PostgreSQL dump into a benchmark/local database
 - `scripts/run-benchmark.sh`: repeatable Jump VM benchmark entrypoint
 - `scripts/run-benchmark-series.sh`: repeated-run wrapper for publishable benchmark statistics
+- `scripts/run-slo-capacity-benchmark.sh`: adaptive SLO-compliant RPS capacity search
 - `scripts/summarize-benchmarks.js`: run-level aggregate summary generator
 
 ## Testing, Load Testing, And Monitoring
@@ -223,6 +224,7 @@ For load testing:
 - `scripts/loadtest.js` defines the k6 traffic model
 - `scripts/BENCHMARK.md` documents the repeatable Jump VM benchmark workflow
 - Use `scripts/run-benchmark-series.sh` for public results; it reports run-level mean, sample standard deviation, median, and IQR.
+- Use `scripts/run-slo-capacity-benchmark.sh` when the headline metric is maximum RPS while p95/p99, error rate, and dropped iterations remain within SLO thresholds.
 - `LOADTEST_BYPASS_KEY` can be used with `x-loadtest-key` to avoid measuring shorten rate limiting during load tests
 
 For monitoring:

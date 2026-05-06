@@ -2,6 +2,7 @@
 
 `run-benchmark.sh` is the single entrypoint for one repeatable benchmark run from the Jump VM.
 Use `run-benchmark-series.sh` when you need repeated runs and run-level statistics for published results.
+Use `run-slo-capacity-benchmark.sh` when you want to estimate the highest RPS that still satisfies the k6 SLO thresholds.
 
 It is designed to keep the benchmark start state stable:
 
@@ -85,12 +86,26 @@ MODE=realistic BASE_RPS=200 SPIKE_MULT=1 ./scripts/run-benchmark-series.sh basel
 - `MODE`: `realistic`, `cold`, or `warm`
 - `BASE_RPS`: target total RPS
 - `SPIKE_MULT`: spike multiplier for realistic mode
+- `LOADTEST_DURATION`: optional total k6 scenario duration override
 - `REDIRECT_RATIO`: redirect share of total traffic
 - `PRE_VUS`: k6 pre-allocated VUs
 - `MAX_VUS`: k6 max VUs
 - `HOT_SET_PCT`: hot key set percentage
 - `HOT_RATIO`: hot key hit ratio
 - `BENCHMARK_RUNS`: number of repeated runs for `run-benchmark-series.sh`. Default: `5`
+
+Capacity search variables:
+
+- `CAPACITY_START_RPS`: adaptive search starting RPS. Default: `200`
+- `CAPACITY_GROWTH_FACTOR`: adaptive growth factor. Default: `1.5`
+- `CAPACITY_MAX_RPS`: adaptive search ceiling. Default: `2000`
+- `CAPACITY_MIN_DELTA_RPS`: stop binary search when high-low is at most this. Default: `50`
+- `CAPACITY_RPS_LEVELS`: optional manual space-separated RPS candidates
+- `SEARCH_RUNS`: runs per search candidate. Default: `1`
+- `CONFIRM_RUNS`: runs per confirmation candidate. Default: `3`
+- `CAPACITY_SEARCH_DURATION`: search `LOADTEST_DURATION`. Default: `60s`
+- `CAPACITY_CONFIRM_DURATION`: confirmation `LOADTEST_DURATION`. Default: `120s`
+- `CAPACITY_DRY_RUN`: set to `true` to test candidate selection and artifact generation without running benchmarks
 
 ## Environment-Specific Values
 
@@ -158,6 +173,51 @@ The aggregate table uses only valid runs:
 - endpoint success rates are above `99%`
 
 If all runs are invalid, the summary still reports diagnostic aggregates but those numbers should not be published as passing results.
+
+## Example: SLO Capacity Benchmark
+
+Use this when the headline result is maximum RPS while preserving SLOs. The capacity wrapper reuses
+`run-benchmark-series.sh`, starts at `CAPACITY_START_RPS`, grows until a failure or `CAPACITY_MAX_RPS`,
+then searches inside the pass/fail bracket and confirms the highest passing candidate.
+
+```bash
+MODE=realistic \
+SPIKE_MULT=1 \
+CAPACITY_START_RPS=200 \
+CAPACITY_MAX_RPS=2000 \
+./scripts/run-slo-capacity-benchmark.sh latest-e28185c
+```
+
+For capacity reporting, prefer `SPIKE_MULT=1` so `BASE_RPS` means sustained target RPS.
+If you intentionally keep a spike multiplier, report both `BASE_RPS` and effective peak RPS.
+
+The default runtime profile is:
+
+- search: `SEARCH_RUNS=1`, `CAPACITY_SEARCH_DURATION=60s`
+- confirmation: `CONFIRM_RUNS=3`, `CAPACITY_CONFIRM_DURATION=120s`
+
+The wrapper creates:
+
+- `benchmark-results/latest-e28185c-capacity/capacity-summary.md`
+- `benchmark-results/latest-e28185c-capacity/capacity-summary.json`
+- `benchmark-results/latest-e28185c-capacity/runs/` for the underlying benchmark series artifacts
+
+Manual candidate mode is available when you already know the range:
+
+```bash
+MODE=realistic \
+SPIKE_MULT=1 \
+CAPACITY_RPS_LEVELS="400 600 800 1000" \
+./scripts/run-slo-capacity-benchmark.sh latest-e28185c
+```
+
+Dry-run mode validates the search logic and summary output without DB, target, or secret values:
+
+```bash
+CAPACITY_DRY_RUN=true \
+CAPACITY_DRY_RUN_PASS_UNTIL_RPS=900 \
+./scripts/run-slo-capacity-benchmark.sh dry-latest
+```
 
 ## Example: Smoke Run
 
@@ -266,6 +326,13 @@ Report at least:
 
 Prefer median and IQR for latency percentiles, and include mean and sample standard deviation as secondary context.
 
+For capacity claims, use `capacity-summary.md` as the headline source:
+
+- report the confirmed SLO capacity RPS
+- include whether the result was capped by `CAPACITY_MAX_RPS`
+- include `MODE`, `SPIKE_MULT`, `REDIRECT_RATIO`, dataset size, and app git SHA
+- keep p95, p99, error rate, and dropped iterations as supporting evidence from the confirmed series
+
 ## Operational Notes
 
 - Keep the dump file on the DB VM for simplicity and repeatability.
@@ -292,3 +359,5 @@ MODE=realistic \
 ```
 
 Repeat at `BASE_RPS=150`, then `200`, and compare `K6_EXIT_CODE`, `http_req_failed`, `redirect_success_rate`, `shorten_success_rate`, and `metrics-post-run.prom`.
+
+For publishable SLO capacity numbers, prefer `run-slo-capacity-benchmark.sh` over manual breakpoint stepping.

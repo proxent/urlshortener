@@ -27,6 +27,9 @@ fi
 
 BENCHMARK_RUNS=${BENCHMARK_RUNS:-5}
 RESULTS_BASE_DIR=${RESULTS_BASE_DIR:-${REPO_ROOT}/benchmark-results}
+if [[ "$RESULTS_BASE_DIR" != /* ]]; then
+  RESULTS_BASE_DIR="${REPO_ROOT}/${RESULTS_BASE_DIR}"
+fi
 export RESULTS_BASE_DIR
 
 if ! [[ "$BENCHMARK_RUNS" =~ ^[0-9]+$ ]] || [ "$BENCHMARK_RUNS" -lt 1 ]; then
