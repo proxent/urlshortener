@@ -463,6 +463,7 @@ run_adaptive_search() {
 
 run_confirmation() {
   local candidate
+  local candidates=()
 
   HIGHEST_SEARCH_PASS=$(highest_pass_rps)
 
@@ -475,7 +476,9 @@ run_confirmation() {
 
   CONFIRMATION_STATUS=failed
 
-  while IFS= read -r candidate; do
+  mapfile -t candidates < <(pass_candidates_desc)
+
+  for candidate in "${candidates[@]}"; do
     [ -n "$candidate" ] || continue
 
     run_candidate confirm "$candidate" "$CONFIRM_RUNS" "$CAPACITY_CONFIRM_DURATION"
@@ -485,7 +488,7 @@ run_confirmation() {
       CONFIRMATION_STATUS=confirmed
       return 0
     fi
-  done < <(pass_candidates_desc)
+  done
 }
 
 json_string() {
