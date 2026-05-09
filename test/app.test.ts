@@ -161,3 +161,15 @@ test('GET /metrics exposes Prometheus metrics', async () => {
   assert.match(response.bodyText ?? '', /process_cpu_user_seconds_total/);
   assert.match(response.bodyText ?? '', /# TYPE http_request_duration_seconds histogram/);
 });
+
+test('unmatched routes use a bounded metrics label', async () => {
+  const uniqueMissingPath = `/missing-${Date.now()}`;
+  const missingResponse = await invokeAppRoute(new TestStore(true), uniqueMissingPath);
+  assert.equal(missingResponse.statusCode, 404);
+
+  const metricsResponse = await invokeAppRoute(new TestStore(true), '/metrics');
+  const metricsText = metricsResponse.bodyText ?? '';
+
+  assert.match(metricsText, /route="unmatched"/);
+  assert.doesNotMatch(metricsText, new RegExp(`route="${uniqueMissingPath}"`));
+});
