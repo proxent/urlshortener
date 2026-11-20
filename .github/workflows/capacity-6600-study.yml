@@ -1,9 +1,9 @@
-name: Sustained capacity under the deployed app limits
+name: Refine the high-rate HTTP boundary
 
 on:
   push:
     branches:
-      - codex/capacity-persistence-20261120
+      - codex/capacity-http-refine-20261120
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rate: [6000, 6300, 6500, 6600]
+        rate: [7100, 7200, 7300, 7600]
     env:
       GOGC: "400"
       GOMEMLIMIT: "1536MiB"
@@ -51,12 +51,12 @@ jobs:
             --k6 "$PWD/capacity-study/capacity-client" \
             --bridge --verify-rates "${{ matrix.rate }}" --scheduled-latency --verify-only \
             --redirect-inflight 2500 --shorten-inflight 400 \
-            --warmup-rate 3200 --warmup 40 --measure 180 --repeats 3 --grid 100 --retry-invalid 1 \
+            --warmup-rate 3200 --warmup 40 --measure 90 --repeats 3 --grid 100 --retry-invalid 1 \
             --out /tmp/urlshortener-capacity-results
       - name: Archive saturation checks
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sustained-matched-${{ matrix.rate }}-arm64-results
+          name: http-refined-${{ matrix.rate }}-arm64-results
           path: /tmp/urlshortener-capacity-results
           retention-days: 14
