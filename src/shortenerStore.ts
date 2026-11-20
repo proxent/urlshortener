@@ -159,18 +159,19 @@ export class PrismaShortenerStore {
     this.pendingHitUpdates = new Map();
 
     const flushPromise = observeStoreOperation('flushPendingHits', async () => {
-      await this.client.$transaction(
-        Array.from(batch.entries(), ([pendingCode, incrementBy]) =>
-          this.client.url.update({
-            where: { code: pendingCode },
-            data: {
-              hitCount: {
-                increment: incrementBy,
-              },
-            },
-          }),
-        ),
-      );
+      const deltas = JSON.stringify(Object.fromEntries(batch));
+      // Lock shared rows in primary-key order across all app replicas.
+      await this.client.$executeRaw `
+        WITH locked AS MATERIALIZED (
+          SELECT id FROM "Url"
+          WHERE code = ANY (ARRAY(SELECT jsonb_object_keys(${deltas}::jsonb)))
+          ORDER BY id
+          FOR NO KEY UPDATE
+        )
+        UPDATE "Url" AS link
+        SET "hitCount" = link."hitCount" + (${deltas}::jsonb ->> link.code)::integer
+        WHERE link.id = ANY (ARRAY(SELECT id FROM locked))
+      `;
     });
 
     this.hitFlushInFlight = flushPromise;

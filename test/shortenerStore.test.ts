@@ -80,27 +80,14 @@ test('findRedirectTargetByCode selects only redirect fields', async () => {
 });
 
 test('incrementHit batches repeated updates for the same short code', async () => {
-  const updates: Array<{ code: string; incrementBy: number }> = [];
-  let transactionCalls = 0;
-
+  const batches: Array<Record<string, number>> = [];
   const fakePrisma = {
-    $queryRaw: async () => 1,
-    $transaction: async <T>(operations: Promise<T>[]) => {
-      transactionCalls += 1;
-      return Promise.all(operations);
-    },
-    url: {
-      create: async () => {
-        throw new Error('not implemented');
-      },
-      findUnique: async () => null,
-      update: async ({ where, data }: { where: { code: string }; data: { hitCount: { increment: number } } }) => {
-        updates.push({ code: where.code, incrementBy: data.hitCount.increment });
-      },
-      findMany: async () => [],
+    $executeRaw: async (sql: TemplateStringsArray, keys: string, deltas: string) => {
+      assert.match(sql.join(''), /ORDER BY id\s+FOR NO KEY UPDATE/);
+      assert.equal(keys, deltas);
+      batches.push(JSON.parse(deltas));
     },
   } as unknown as typeof prisma;
-
   const store = new PrismaShortenerStore(fakePrisma, () => 'unused', {
     hitCountFlushIntervalMs: 60_000,
   });
@@ -110,39 +97,49 @@ test('incrementHit batches repeated updates for the same short code', async () =
   await store.incrementHit('code2');
   await store.flushPendingHits();
 
-  assert.equal(transactionCalls, 1);
-  assert.deepEqual(updates, [
-    { code: 'code1', incrementBy: 2 },
-    { code: 'code2', incrementBy: 1 },
-  ]);
+  assert.deepEqual(batches, [{ code1: 2, code2: 1 }]);
 });
 
 test('incrementHit flushes immediately when the pending batch reaches the limit', async () => {
-  let transactionCalls = 0;
-
+  const batches: Array<Record<string, number>> = [];
   const fakePrisma = {
-    $queryRaw: async () => 1,
-    $transaction: async <T>(operations: Promise<T>[]) => {
-      transactionCalls += 1;
-      return Promise.all(operations);
-    },
-    url: {
-      create: async () => {
-        throw new Error('not implemented');
-      },
-      findUnique: async () => null,
-      update: async () => undefined,
-      findMany: async () => [],
+    $executeRaw: async (_sql: TemplateStringsArray, _keys: string, deltas: string) => {
+      batches.push(JSON.parse(deltas));
     },
   } as unknown as typeof prisma;
-
   const store = new PrismaShortenerStore(fakePrisma, () => 'unused', {
     hitCountFlushIntervalMs: 60_000,
     maxPendingHitUpdates: 2,
   });
 
   await store.incrementHit('code1');
+  assert.deepEqual(batches, []);
   await store.incrementHit('code2');
 
-  assert.equal(transactionCalls, 1);
+  assert.deepEqual(batches, [{ code1: 1, code2: 1 }]);
+});
+
+test('a failed hit batch is merged with increments recorded before retry', async () => {
+  const batches: Array<Record<string, number>> = [];
+  const failure = new Error('database temporarily unavailable');
+  const fakePrisma = {
+    $executeRaw: async (_sql: TemplateStringsArray, _keys: string, deltas: string) => {
+      batches.push(JSON.parse(deltas));
+      if (batches.length === 1) {
+        throw failure;
+      }
+    },
+  } as unknown as typeof prisma;
+  const store = new PrismaShortenerStore(fakePrisma, () => 'unused', {
+    hitCountFlushIntervalMs: 60_000,
+  });
+
+  await store.incrementHit('code1');
+  await store.incrementHit('code2');
+  await assert.rejects(store.flushPendingHits(), failure);
+  await store.incrementHit('code1');
+  await store.flushPendingHits();
+  await store.flushPendingHits();
+
+  assert.deepEqual(batches, [{ code1: 1, code2: 1 }, { code1: 2, code2: 1 }]);
 });
