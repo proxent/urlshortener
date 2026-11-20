@@ -1,0 +1,54 @@
+name: Extended deployed-image capacity study
+
+on:
+  push:
+    branches:
+      - codex/capacity-extended-20261120
+
+permissions:
+  contents: read
+
+jobs:
+  capacity:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 50
+    env:
+      IMAGE: phx.ocir.io/ax4dlruayn0q/url-shortener-repository@sha256:2b3341b29c0ca2a4b0eaba02447130d84bed777ac51b2e365675e4b8ebaf82d2
+      DATABASE_IMAGE: postgres@sha256:83abe4d94e4c5087eb7c3d2663ca876a9e6023746e5be468fda1d6e7152b4054
+      GO_IMAGE: golang@sha256:f6751d823c26342f9506c03797d2527668d095b0a15f1862cddb4d927a7a4ced
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Pull the verified deployed OCI image
+        env:
+          REGISTRY_USERNAME: ${{ secrets.OCIR_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.OCIR_TOKEN }}
+        run: |
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'docker logout phx.ocir.io >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login phx.ocir.io --username "$REGISTRY_USERNAME" --password-stdin
+          docker pull --platform linux/arm64 "$IMAGE"
+      - name: Compile the loopback-only client
+        run: |
+          docker pull --platform linux/arm64 "$DATABASE_IMAGE"
+          docker pull --platform linux/arm64 "$GO_IMAGE"
+          docker run --rm --platform linux/arm64 --network none -e CGO_ENABLED=0 \
+            -v "$PWD/capacity-study:/lab" -w /lab "$GO_IMAGE" \
+            go build -trimpath -o capacity-client capacity-client.go
+          ./capacity-study/capacity-client version
+      - name: Measure and verify the capacity bracket
+        run: |
+          python3 capacity-study/capacity.py \
+            --image "$IMAGE" --db-image "$DATABASE_IMAGE" \
+            --source 2ef973a5a0fa9afa2ccda95ad4f76bac1c8b447a \
+            --k6 "$PWD/capacity-study/capacity-client" \
+            --explore-rates 3200,4000,4800,5600,6400,7200,8400,9600,11000,12800 \
+            --out /tmp/urlshortener-capacity-results
+      - name: Save synthetic results and request samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extended-arm64-capacity-results
+          path: /tmp/urlshortener-capacity-results
+          retention-days: 14
