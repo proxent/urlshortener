@@ -11,6 +11,6 @@ resources:
 - ingress.yaml
 
 images:
-- digest: sha256:7711f1569099a5c0fb29e9c58491e36007005432a84c5b6d8dec8e372df5d0d2
+- digest: sha256:2b3341b29c0ca2a4b0eaba02447130d84bed777ac51b2e365675e4b8ebaf82d2
   name: phx.ocir.io/ax4dlruayn0q/url-shortener-repository
   newName: phx.ocir.io/ax4dlruayn0q/url-shortener-repository
