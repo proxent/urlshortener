@@ -1,0 +1,45 @@
+name: Isolated ARM64 capacity study
+
+on:
+  push:
+    branches:
+      - codex/capacity-study-20261120
+
+permissions:
+  contents: read
+
+jobs:
+  capacity:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the deployed source revision
+        run: |
+          docker build --platform linux/arm64 -t urlshortener-capacity:approved-source .
+          docker pull --platform linux/arm64 postgres@sha256:83abe4d94e4c5087eb7c3d2663ca876a9e6023746e5be468fda1d6e7152b4054
+      - name: Set up pinned k6
+        run: |
+          curl --retry 4 --fail --silent --show-error --location \
+            https://github.com/grafana/k6/releases/download/v1.6.1/k6-v1.6.1-linux-arm64.tar.gz \
+            --output /tmp/benchmark-k6.tar.gz
+          printf '%s  %s\n' 698e47804a8cf679237dc7f19813e2967e0a892d4b9387f6f6de46da259069f9 /tmp/benchmark-k6.tar.gz | sha256sum -c -
+          mkdir -p /tmp/benchmark-k6
+          tar -xzf /tmp/benchmark-k6.tar.gz -C /tmp/benchmark-k6 --strip-components=1
+          printf '%s\n' /tmp/benchmark-k6 >> "$GITHUB_PATH"
+      - name: Measure the capacity bracket
+        run: |
+          python3 capacity-study/capacity.py \
+            --image urlshortener-capacity:approved-source \
+            --db-image postgres@sha256:83abe4d94e4c5087eb7c3d2663ca876a9e6023746e5be468fda1d6e7152b4054 \
+            --source 2ef973a5a0fa9afa2ccda95ad4f76bac1c8b447a \
+            --out /tmp/urlshortener-capacity-results
+      - name: Save synthetic results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-capacity-results
+          path: /tmp/urlshortener-capacity-results
+          retention-days: 14
