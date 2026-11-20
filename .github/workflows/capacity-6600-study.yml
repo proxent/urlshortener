@@ -1,9 +1,9 @@
-name: Sustained response and counter persistence
+name: Sustained capacity under the deployed app limits
 
 on:
   push:
     branches:
-      - codex/capacity-drain-20261120
+      - codex/capacity-persistence-20261120
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rate: [6000, 6300, 6500]
+        rate: [6000, 6300, 6500, 6600]
     env:
       GOGC: "400"
       GOMEMLIMIT: "1536MiB"
@@ -57,6 +57,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sustained-${{ matrix.rate }}-arm64-results
+          name: sustained-matched-${{ matrix.rate }}-arm64-results
           path: /tmp/urlshortener-capacity-results
           retention-days: 14

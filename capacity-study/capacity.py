@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 APP_MODULE = "a4af9c110f925f8c05094563d391b47e1181ce7eb99a33cff83dab30e82fbb49"
 SEED_ROWS = 20_000
 CPU_LIMIT = "0.7"
+APP_MEMORY_LIMIT = "5g"
 CLOSEST_RPS = (600, 800, 1000, 1250, 1500, 1800, 2100, 2400, 2800, 3200)
 GRID = 50
 
@@ -39,6 +40,18 @@ def container_cpu(name):
     relative = Path(f"/proc/{pid}/cgroup").read_text().split("::", 1)[1].strip().lstrip("/")
     with Path("/sys/fs/cgroup", relative, "cpu.stat").open() as metrics:
         return {line.split()[0]: int(line.split()[1]) for line in metrics}
+
+
+def container_state(name):
+    state = json.loads(call(["docker", "inspect", "--format", "{{json .State}}", name]))
+    snapshot = {key: state[key] for key in ("Running", "OOMKilled", "ExitCode", "FinishedAt")}
+    if state["Running"]:
+        try:
+            relative = Path(f'/proc/{state["Pid"]}/cgroup').read_text().split("::", 1)[1].strip().lstrip("/")
+            snapshot["memory_peak_bytes"] = int(Path("/sys/fs/cgroup", relative, "memory.peak").read_text())
+        except FileNotFoundError:
+            pass
+    return snapshot
 
 
 def proc_cpu(pid):
@@ -136,6 +149,7 @@ FROM "Url";""")
             "cpu": call(["lscpu", "-J"]),
             "cores": self.cores,
             "app_cpu_limit": CPU_LIMIT,
+            "app_memory_limit": APP_MEMORY_LIMIT,
             "db_cpu_limit": 0.95,
             "app_image": call(["docker", "image", "inspect", "--format", "{{.Id}} {{.Architecture}} {{json .RepoDigests}}", self.args.image]),
             "db_image": call(["docker", "image", "inspect", "--format", "{{.Id}} {{.Architecture}} {{json .RepoDigests}}", self.args.db_image]),
@@ -157,7 +171,7 @@ FROM "Url";""")
             env = dict(os.environ, DATABASE_URL=f"postgresql://bench:{self.secret}@db:5432/{database}")
             publish = [] if self.args.bridge else ["-p", "127.0.0.1::3000"]
             call(["docker", "run", "-d", "--pull=never", "--name", name, "--network", self.net,
-                  "--cpuset-cpus", str(self.cores[slot]), "--cpus", CPU_LIMIT, "--memory", "1024m",
+                  "--cpuset-cpus", str(self.cores[slot]), "--cpus", CPU_LIMIT, "--memory", APP_MEMORY_LIMIT,
                   *publish, "-e", "DATABASE_URL", "-e", "BASE_URL=http://bench.invalid",
                   "-e", "NODE_ENV=production", "-e", "TRUST_PROXY=false", "-e", "RATE_LIMIT_MAX_SHORTEN=1000000",
                   self.args.image], env=env)
@@ -291,7 +305,9 @@ FROM "Url";""")
             before = {name: container_cpu(name) for name in [self.db, *self.apps]}
             measure = self.phase(out, "measure", seconds, seed, redirects, creates, origins, database)
             ended = time.monotonic()
-            after = {name: container_cpu(name) for name in [self.db, *self.apps]}
+            states = {name: container_state(name) for name in [self.db, *self.apps]}
+            file_json(out / "container-state.json", states)
+            after = {name: container_cpu(name) for name, state in states.items() if state["Running"]}
             expected = baseline + measure["redirect"]["success"] + 2
             drained = []
             for delay in (0, 2, 5, 10, 20, 40, 60):
@@ -328,12 +344,14 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
                  and (not self.args.scheduled_latency or measure.get("client_schedule_lag_p999_ms", 0) < 20))
         passed = all([
             valid, measure["exit"] == 0, measure["dropped"] == 0,
+            all(state["Running"] for state in states.values()),
             measure["redirect"]["completed"] == measure["redirect"]["offered"],
             measure["shorten"]["completed"] == measure["shorten"]["offered"],
         ])
         result = dict(index=index, stage=stage, rps=rate, seed=seed, valid=valid, passed=passed,
                       warmup_seconds=warmup, warmup_rps=warm_rate, measure_seconds=seconds, warmup=pre, measure=measure,
-                      db_stored=stored, hit_audit=audit, elapsed_sec=round(time.monotonic() - phase_begin, 2))
+                      db_stored=stored, hit_audit=audit, container_states=states,
+                      elapsed_sec=round(time.monotonic() - phase_begin, 2))
         self.trials.append(result)
         file_json(out / "trial.json", result)
         file_json(self.out / "trials.json", self.trials)
@@ -344,8 +362,10 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
                 "periods": after[name]["nr_periods"] - before[name]["nr_periods"],
             }
             for slot, name in zip(("db", "app_a", "app_b"), (self.db, *self.apps))
+            if name in after
         }
-        summary = dict(index=index, stage=stage, rate=rate, valid=valid, passed=passed, cpu=cpu, hit_audit=audit, **measure)
+        summary = dict(index=index, stage=stage, rate=rate, valid=valid, passed=passed, cpu=cpu,
+                       hit_audit=audit, container_states=states, **measure)
         print("TRIAL " + json.dumps(summary, separators=(",", ":")), flush=True)
         return result
 
