@@ -1,9 +1,9 @@
-name: 6600–6700 RPS confirmation
+name: Sustained response and counter persistence
 
 on:
   push:
     branches:
-      - codex/capacity-6600-20261120
+      - codex/capacity-drain-20261120
 
 permissions:
   contents: read
@@ -11,7 +11,11 @@ permissions:
 jobs:
   capacity:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 36
+    timeout-minutes: 38
+    strategy:
+      fail-fast: false
+      matrix:
+        rate: [6000, 6300, 6500]
     env:
       GOGC: "400"
       GOMEMLIMIT: "1536MiB"
@@ -39,20 +43,20 @@ jobs:
             -v "$PWD/capacity-study:/lab" -w /lab "$GO_IMAGE" \
             go build -trimpath -o capacity-client capacity-client.go
           ./capacity-study/capacity-client version
-      - name: Verify high-rate SLO from planned arrival times
+      - name: Measure responses and database counter backlog
         run: |
           python3 capacity-study/capacity.py \
             --image "$IMAGE" --db-image "$DATABASE_IMAGE" \
             --source 2ef973a5a0fa9afa2ccda95ad4f76bac1c8b447a \
             --k6 "$PWD/capacity-study/capacity-client" \
-            --bridge --verify-rates 6600,6700 --scheduled-latency --verify-only \
+            --bridge --verify-rates "${{ matrix.rate }}" --scheduled-latency --verify-only \
             --redirect-inflight 2500 --shorten-inflight 400 \
-            --warmup-rate 3200 --warmup 40 --measure 60 --grid 100 --retry-invalid 1 \
+            --warmup-rate 3200 --warmup 40 --measure 180 --repeats 3 --grid 100 --retry-invalid 1 \
             --out /tmp/urlshortener-capacity-results
       - name: Archive saturation checks
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: final-adjacent-arm64-results
+          name: sustained-${{ matrix.rate }}-arm64-results
           path: /tmp/urlshortener-capacity-results
           retention-days: 14

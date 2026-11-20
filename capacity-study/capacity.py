@@ -182,7 +182,20 @@ FROM "Url";""")
             origins.append(origin)
         return origins
 
-    def phase(self, out, phase, seconds, seed, redirects, creates, origins):
+    def hits(self, database):
+        return int(self.psql(database, 'SELECT coalesce(sum("hitCount"), 0) FROM "Url"'))
+
+    def drained_warmup(self, database):
+        started = time.monotonic()
+        values = [{"seconds": 0, "hits": self.hits(database)}]
+        while time.monotonic() - started < 40:
+            time.sleep(3)
+            values.append({"seconds": round(time.monotonic() - started, 3), "hits": self.hits(database)})
+            if len(values) >= 4 and len({row["hits"] for row in values[-4:]}) == 1:
+                return values, True
+        return values, False
+
+    def phase(self, out, phase, seconds, seed, redirects, creates, origins, database=None):
         generator = self.cores[3:]
         names = [f"cpu{cpu}" for cpu in generator]
         env = dict(os.environ, TARGET=",".join(origins), SEED_FILE=str(self.seed_file),
@@ -193,6 +206,8 @@ FROM "Url";""")
                    CAPACITY_LATENCY_CLOCK="scheduled" if self.args.scheduled_latency else "actual",
                    NO_PROXY="127.0.0.1", HTTP_PROXY="", HTTPS_PROXY="", ALL_PROXY="", K6_NO_USAGE_REPORT="true")
         cpu_samples = []
+        hit_samples = []
+        next_snapshot = 10
         with (out / f"{phase}.log").open("w") as log:
             command = ["taskset", "-c", ",".join(map(str, generator)), self.args.k6, "run", "--quiet",
                        "--summary-export", str(out / f"{phase}.json"), str(HERE / "capacity-load.js")]
@@ -217,6 +232,9 @@ FROM "Url";""")
                                                 idle=(idle/sum(totals) if sum(totals) else 0),
                                                 steal=(steal/sum(totals) if sum(totals) else 0)))
                         last, previous_cpu, previous_cores = now, cpu, ticks
+                    if database and now - begin >= next_snapshot and next_snapshot <= seconds:
+                        hit_samples.append(dict(seconds=round(now-begin, 3), hits=self.hits(database)))
+                        next_snapshot += 10
                     if now - begin > seconds + 42:
                         raise TimeoutError("k6 exceeded the phase's time limit")
             finally:
@@ -224,6 +242,8 @@ FROM "Url";""")
                     child.kill()
                     child.wait()
         file_json(out / f"{phase}-cpu.json", cpu_samples)
+        if database:
+            file_json(out / f"{phase}-hits.json", hit_samples)
         if child.returncode not in (0, 99):
             raise RuntimeError(f"k6 exited {child.returncode}; see {out}/{phase}.log")
         metrics = json.loads((out / f"{phase}.json").read_text())["metrics"]
@@ -264,11 +284,23 @@ FROM "Url";""")
             self.psql("bench", f"CREATE DATABASE {database} TEMPLATE study_template")
             origins = self.start_apps(database)
             pre = self.phase(out, "warmup", warmup, seed, warm_rate - warm_creates, warm_creates, origins)
-            time.sleep(.4)
+            warm_hits, baseline_stable = self.drained_warmup(database)
+            file_json(out / "warmup-hits.json", warm_hits)
+            baseline = warm_hits[-1]["hits"]
             self.psql(database, "SELECT pg_stat_statements_reset()")
             before = {name: container_cpu(name) for name in [self.db, *self.apps]}
-            measure = self.phase(out, "measure", seconds, seed, redirects, creates, origins)
+            measure = self.phase(out, "measure", seconds, seed, redirects, creates, origins, database)
+            ended = time.monotonic()
             after = {name: container_cpu(name) for name in [self.db, *self.apps]}
+            expected = baseline + measure["redirect"]["success"] + 2
+            drained = []
+            for delay in (0, 2, 5, 10, 20, 40, 60):
+                time.sleep(max(0, ended + delay - time.monotonic()))
+                drained.append(dict(seconds=round(time.monotonic() - ended, 3), hits=self.hits(database)))
+                if drained[-1]["hits"] >= expected:
+                    break
+            audit = dict(baseline=baseline, baseline_stable=baseline_stable, minimum_expected=expected, drain=drained)
+            file_json(out / "hit-audit.json", audit)
             file_json(out / "container-cpu.json", {name: {key: value - before[name].get(key, 0)
                                                           for key, value in stats.items()}
                                                    for name, stats in after.items()})
@@ -301,7 +333,7 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
         ])
         result = dict(index=index, stage=stage, rps=rate, seed=seed, valid=valid, passed=passed,
                       warmup_seconds=warmup, warmup_rps=warm_rate, measure_seconds=seconds, warmup=pre, measure=measure,
-                      db_stored=stored, elapsed_sec=round(time.monotonic() - phase_begin, 2))
+                      db_stored=stored, hit_audit=audit, elapsed_sec=round(time.monotonic() - phase_begin, 2))
         self.trials.append(result)
         file_json(out / "trial.json", result)
         file_json(self.out / "trials.json", self.trials)
@@ -313,7 +345,7 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
             }
             for slot, name in zip(("db", "app_a", "app_b"), (self.db, *self.apps))
         }
-        summary = dict(index=index, stage=stage, rate=rate, valid=valid, passed=passed, cpu=cpu, **measure)
+        summary = dict(index=index, stage=stage, rate=rate, valid=valid, passed=passed, cpu=cpu, hit_audit=audit, **measure)
         print("TRIAL " + json.dumps(summary, separators=(",", ":")), flush=True)
         return result
 
