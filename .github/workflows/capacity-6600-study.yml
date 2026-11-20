@@ -1,9 +1,9 @@
-name: Sustained capacity under the deployed app limits
+name: Sustained view counter capacity at lower rates
 
 on:
   push:
     branches:
-      - codex/capacity-persistence-20261120
+      - codex/capacity-persistence-lower-20261120
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rate: [6000, 6300, 6500, 6600]
+        rate: [4000, 5000, 5500, 5800]
     env:
       GOGC: "400"
       GOMEMLIMIT: "1536MiB"
