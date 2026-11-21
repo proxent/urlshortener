@@ -106,6 +106,7 @@ class Lab:
         self.design = random.Random(20261120)
         self.trials = []
         self.started = time.monotonic()
+        self.hit_writes = "on"
 
     def psql(self, database, sql, csv=False):
         flag = ["--csv"] if csv else ["-At"]
@@ -174,6 +175,8 @@ FROM "Url";""")
                   "--cpuset-cpus", str(self.cores[slot]), "--cpus", CPU_LIMIT, "--memory", APP_MEMORY_LIMIT,
                   *publish, "-e", "DATABASE_URL", "-e", "BASE_URL=http://bench.invalid",
                   "-e", "NODE_ENV=production", "-e", "TRUST_PROXY=false", "-e", "RATE_LIMIT_MAX_SHORTEN=1000000",
+                  "-e", f"LAB_HIT_WRITES={self.hit_writes}", "-e", "NODE_OPTIONS=--require=/tmp/hit-mode.cjs",
+                  "-v", f"{HERE / 'hit-mode.cjs'}:/tmp/hit-mode.cjs:ro",
                   self.args.image], env=env)
             if self.args.bridge:
                 details = json.loads(call(["docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", name]))
@@ -308,13 +311,11 @@ FROM "Url";""")
             states = {name: container_state(name) for name in [self.db, *self.apps]}
             file_json(out / "container-state.json", states)
             after = {name: container_cpu(name) for name, state in states.items() if state["Running"]}
-            expected = baseline + measure["redirect"]["success"] + 2
+            expected = baseline + measure["redirect"]["success"] + 2 if self.hit_writes == "on" else 0
             drained = []
-            for delay in (0, 2, 5, 10, 20, 40, 60):
+            for delay in (0, 5, 15):
                 time.sleep(max(0, ended + delay - time.monotonic()))
                 drained.append(dict(seconds=round(time.monotonic() - ended, 3), hits=self.hits(database)))
-                if drained[-1]["hits"] >= expected:
-                    break
             audit = dict(baseline=baseline, baseline_stable=baseline_stable, minimum_expected=expected, drain=drained)
             file_json(out / "hit-audit.json", audit)
             file_json(out / "container-cpu.json", {name: {key: value - before[name].get(key, 0)
@@ -329,6 +330,8 @@ FROM "Url";""")
                 logs = subprocess.run(["docker", "logs", "--tail", "200", app], capture_output=True, text=True)
                 (out / f"app-{i}.log").write_text(logs.stdout + logs.stderr)
             stored = self.psql(database, 'SELECT count(*), sum("hitCount") FROM "Url"')
+            if self.hit_writes == "off" and (baseline or int(stored.split("|")[1])):
+                raise RuntimeError("Counter writes remained active in the disabled arm")
             (out / "db-counts.txt").write_text(stored + "\n")
             statements = self.psql(database, """
 SELECT calls, rows, total_exec_time, mean_exec_time, shared_blks_hit, shared_blks_read,
@@ -349,6 +352,7 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
             measure["shorten"]["completed"] == measure["shorten"]["offered"],
         ])
         result = dict(index=index, stage=stage, rps=rate, seed=seed, valid=valid, passed=passed,
+                      hit_writes=self.hit_writes,
                       warmup_seconds=warmup, warmup_rps=warm_rate, measure_seconds=seconds, warmup=pre, measure=measure,
                       db_stored=stored, hit_audit=audit, container_states=states,
                       elapsed_sec=round(time.monotonic() - phase_begin, 2))
@@ -365,9 +369,23 @@ FROM pg_stat_statements ORDER BY total_exec_time DESC;""", csv=True)
             if name in after
         }
         summary = dict(index=index, stage=stage, rate=rate, valid=valid, passed=passed, cpu=cpu,
+                       hit_writes=self.hit_writes, seed=seed, db_stored=stored,
                        hit_audit=audit, container_states=states, **measure)
         print("TRIAL " + json.dumps(summary, separators=(",", ":")), flush=True)
         return result
+
+    def compare_hit_writes(self, rate):
+        for repeat in range(self.args.repeats):
+            seed = self.design.randrange(2**32)
+            order = ("on", "off") if repeat % 2 == 0 else ("off", "on")
+            for mode in order:
+                self.hit_writes = mode
+                self.trial(rate, "confirm", seed)
+        result = dict(rate=rate, measured_seconds=self.args.measure, pairs=self.args.repeats,
+                      conditions={mode: {key: sum(row[key] for row in self.trials if row["hit_writes"] == mode)
+                                         for key in ("valid", "passed")} for mode in ("on", "off")})
+        file_json(self.out / "result.json", result)
+        print("RESULT " + json.dumps(result, separators=(",", ":")), flush=True)
 
     def valid_trial(self, rate, stage, seed=None, evidence=None):
         for _ in range(self.args.retry_invalid + 1):
@@ -480,6 +498,7 @@ def main():
     parser.add_argument("--redirect-inflight", type=int, default=850)
     parser.add_argument("--shorten-inflight", type=int, default=125)
     parser.add_argument("--scheduled-latency", action="store_true")
+    parser.add_argument("--compare-hit-writes", type=int, help="test both counter modes at one target rate")
     args = parser.parse_args()
     args.coarse = CLOSEST_RPS
     if args.explore_rates:
@@ -489,7 +508,11 @@ def main():
     lab = Lab(args)
     try:
         lab.start()
-        if args.rate:
+        if args.compare_hit_writes:
+            if not args.bridge or not args.scheduled_latency:
+                raise ValueError("Use the isolated bridge and scheduled latency for comparisons")
+            lab.compare_hit_writes(args.compare_hit_writes)
+        elif args.rate:
             lab.trial(args.rate, "probe")
         else:
             if args.verify_rates:
